@@ -681,7 +681,7 @@ server <- function(input, output, session) {
           ),
           div(class = "card",
               div(class = "card-hdr",
-                  div(class = "card-ttl", "Evolução 6 Meses"),
+                  div(class = "card-ttl", "Evolução 12 Meses"),
                   span(class = "badge", "Receita + Resultado")),
               shinycssloaders::withSpinner(plotlyOutput("g_evolucao", height = "200px"), type = 4, color = "#00c49a")
           )
