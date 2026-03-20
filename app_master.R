@@ -8,21 +8,17 @@
 # - Insights e proposta de valor
 # ============================================================
 
-required_pkgs <- c(
-  "shiny", "dplyr", "tidyr", "lubridate", "readxl",
-  "janitor", "plotly", "DT", "DBI", "RSQLite",
-  "shinycssloaders", "stringr"
-)
-instalar_se_falta <- function(pkgs) {
-  miss <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
-  if (length(miss) > 0) install.packages(miss, quiet = TRUE)
-  invisible(lapply(pkgs, library, character.only = TRUE,
-                   warn.conflicts = FALSE, quietly = TRUE))
-}
-instalar_se_falta(required_pkgs)
+# Pacotes carregados via Dockerfile — sem install.packages em produção
+suppressPackageStartupMessages({
+  library(shiny); library(dplyr); library(tidyr); library(lubridate)
+  library(readxl); library(janitor); library(plotly); library(DT)
+  library(DBI); library(RSQLite); library(shinycssloaders); library(stringr)
+})
 
-PROJ_ROOT <- "C:/Users/Mateu/OneDrive - unb.br/ESTAT/BSBSTAY - Dados 1/bsbstay_shiny_app/bsbstay/"
-source(file.path(PROJ_ROOT, "R", "gdrive_public.R"), local = FALSE)
+APP_ROOT <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork = FALSE)
+if (!exists("carregar_dados_app")) {
+  source(file.path(APP_ROOT, "R", "gdrive_public.R"), local = FALSE)
+}
 
 # ── Helpers ────────────────────────────────────────────────────
 `%||%` <- function(x, y) {
@@ -106,8 +102,16 @@ insight_card <- function(ico, titulo, corpo, cor = "blue") {
 
 # ── Carregamento inicial ────────────────────────────────────────
 APP_DATA <- tryCatch(
-  carregar_dados_app(folder_id = DRIVE_FOLDER_ID, forcar_dl = FALSE, forcar_etl = FALSE),
-  error = function(e) { message("[Master] Erro: ", e$message); structure(list(), erro_msg = e$message) }
+  carregar_dados_app(
+    file_id    = DRIVE_FILE_ID,
+    folder_id  = DRIVE_FOLDER_ID,
+    forcar_dl  = FALSE,
+    forcar_etl = FALSE
+  ),
+  error = function(e) {
+    message("[Master] Erro no carregamento: ", e$message)
+    structure(list(), erro_msg = e$message)
+  }
 )
 
 # Extrai dados flat de todos os proprietários (para aba Carteira)
@@ -389,7 +393,12 @@ server <- function(input, output, session) {
   observeEvent(input$btn_sync, {
     rv$syncing <- TRUE
     tryCatch({
-      nd <- carregar_dados_app(folder_id = DRIVE_FOLDER_ID, forcar_dl = TRUE, forcar_etl = TRUE)
+      nd <- carregar_dados_app(
+        file_id    = DRIVE_FILE_ID,
+        folder_id  = DRIVE_FOLDER_ID,
+        forcar_dl  = TRUE,
+        forcar_etl = TRUE
+      )
       rv$app_data <- nd; rv$last_sync <- format(Sys.time(), "%d/%m/%Y %H:%M"); rv$sync_status <- "ok"
       showNotification("✓ Dados atualizados!", type = "message", duration = 4)
     }, error = function(e) {
