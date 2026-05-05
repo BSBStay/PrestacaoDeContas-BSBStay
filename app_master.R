@@ -589,7 +589,7 @@ server <- function(input, output, session) {
                  p("Aguarde enquanto os dados são preparados.")))
     }
     req(input$mes_sel)
-    m <- isolate(rm_mes())
+    m <- rm_mes()
     mes_label_sel <- {
       dt <- suppressWarnings(as.Date(paste0(input$mes_sel, "-01")))
       if (!is.na(dt)) fmt_mes_pt(dt) else input$mes_sel
