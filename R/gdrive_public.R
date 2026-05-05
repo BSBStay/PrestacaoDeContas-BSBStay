@@ -493,10 +493,7 @@ montar_objeto_app_sqlite <- function(con) {
         imovel        = as.character(nome_canonico),
         receita_bruta = dplyr::coalesce(as.numeric(receita_liquida), 0),
         taxa_adm      = dplyr::coalesce(as.numeric(tx_adm), 0),
-        outros_custos = dplyr::coalesce(as.numeric(custos_total), 0) +
-          dplyr::coalesce(as.numeric(manutencao_total), 0) +
-          dplyr::coalesce(as.numeric(reposicao_total), 0) +
-          dplyr::coalesce(as.numeric(despesas_total), 0),
+        outros_custos = dplyr::coalesce(as.numeric(custos_total), 0),
         resultado_liq = dplyr::coalesce(as.numeric(resultado), 0),
         ocupacao      = round(dplyr::coalesce(as.numeric(taxa_ocupacao), 0) * 100),
         diaria_media  = dplyr::coalesce(as.numeric(diaria_media), 0),
@@ -851,7 +848,7 @@ auth_ensure_table <- function(con = NULL) {
   own <- is.null(con)
   if (own) con <- sqlite_connect()
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
-
+  
   if (!DBI::dbExistsTable(con, "auth_senhas")) {
     DBI::dbExecute(con, "
       CREATE TABLE auth_senhas (
@@ -879,14 +876,14 @@ auth_tem_senha <- function(cpf_cnpj, con = NULL) {
   own <- is.null(con)
   if (own) con <- sqlite_connect()
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
-
+  
   auth_ensure_table(con)
   cpf_norm <- trimws(as.character(cpf_cnpj))
-
+  
   res <- tryCatch(
     DBI::dbGetQuery(con,
-      "SELECT COUNT(*) AS n FROM auth_senhas WHERE cpf_cnpj = ?",
-      params = list(cpf_norm)),
+                    "SELECT COUNT(*) AS n FROM auth_senhas WHERE cpf_cnpj = ?",
+                    params = list(cpf_norm)),
     error = function(e) data.frame(n = 0)
   )
   isTRUE(res$n[1] > 0)
@@ -897,20 +894,20 @@ auth_set_senha <- function(cpf_cnpj, senha, con = NULL) {
   own <- is.null(con)
   if (own) con <- sqlite_connect()
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
-
+  
   auth_ensure_table(con)
   cpf_norm <- trimws(as.character(cpf_cnpj))
   hash     <- auth_hash(senha, cpf_norm)
   agora    <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-
+  
   if (auth_tem_senha(cpf_norm, con)) {
     DBI::dbExecute(con,
-      "UPDATE auth_senhas SET senha_hash = ?, alterado_em = ? WHERE cpf_cnpj = ?",
-      params = list(hash, agora, cpf_norm))
+                   "UPDATE auth_senhas SET senha_hash = ?, alterado_em = ? WHERE cpf_cnpj = ?",
+                   params = list(hash, agora, cpf_norm))
   } else {
     DBI::dbExecute(con,
-      "INSERT INTO auth_senhas (cpf_cnpj, senha_hash, criado_em, alterado_em) VALUES (?, ?, ?, ?)",
-      params = list(cpf_norm, hash, agora, agora))
+                   "INSERT INTO auth_senhas (cpf_cnpj, senha_hash, criado_em, alterado_em) VALUES (?, ?, ?, ?)",
+                   params = list(cpf_norm, hash, agora, agora))
   }
   invisible(TRUE)
 }
@@ -920,14 +917,14 @@ auth_check_senha <- function(cpf_cnpj, senha, con = NULL) {
   own <- is.null(con)
   if (own) con <- sqlite_connect()
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
-
+  
   auth_ensure_table(con)
   cpf_norm <- trimws(as.character(cpf_cnpj))
-
+  
   res <- tryCatch(
     DBI::dbGetQuery(con,
-      "SELECT senha_hash FROM auth_senhas WHERE cpf_cnpj = ?",
-      params = list(cpf_norm)),
+                    "SELECT senha_hash FROM auth_senhas WHERE cpf_cnpj = ?",
+                    params = list(cpf_norm)),
     error = function(e) data.frame(senha_hash = character(0))
   )
   if (nrow(res) == 0) return(FALSE)
