@@ -42,29 +42,21 @@ source(file.path(app_root, "R", "gdrive_public.R"), local = FALSE)
 # ── 5. Pré-aquecimento do cache (boot-time) ───────────────────
 # forcar_dl=FALSE: só baixa se o cache for inexistente ou velho.
 # O resultado é guardado em APP_DATA_GLOBAL para os módulos filhos.
-# ── 5. Pré-aquecimento assíncrono (após o servidor subir) ─────
-# O download do Drive acontece DEPOIS que a porta já está aberta,
-# evitando timeout do Render durante o port scan.
-# APP_DATA_GLOBAL começa vazio; o app exibe "Carregando..." até ficar pronto.
-APP_DATA_GLOBAL <<- structure(list(), erro_msg = "Aguardando carregamento inicial...")
-
-later::later(function() {
-  message("[run.R] Iniciando pre-aquecimento do cache (background)...")
-  APP_DATA_GLOBAL <<- tryCatch(
-    carregar_dados_app(
-      file_id    = DRIVE_FILE_ID,
-      folder_id  = DRIVE_FOLDER_ID,
-      forcar_dl  = FALSE,
-      forcar_etl = FALSE
-    ),
-    error = function(e) {
-      message("[run.R] AVISO cache: ", e$message,
-              " - app tentara na primeira sessao.")
-      structure(list(), erro_msg = e$message)
-    }
-  )
-  message(sprintf("[run.R] Cache pronto: %d proprietario(s).", length(APP_DATA_GLOBAL)))
-}, delay = 2)
+message("[run.R] Iniciando pré-aquecimento do cache...")
+APP_DATA_GLOBAL <<- tryCatch(
+  carregar_dados_app(
+    file_id    = DRIVE_FILE_ID,
+    folder_id  = DRIVE_FOLDER_ID,
+    forcar_dl  = FALSE,
+    forcar_etl = FALSE
+  ),
+  error = function(e) {
+    message("[run.R] AVISO cache: ", e$message,
+            " — app tentará na primeira sessão.")
+    structure(list(), erro_msg = e$message)
+  }
+)
+message(sprintf("[run.R] Cache pronto: %d proprietário(s).", length(APP_DATA_GLOBAL)))
 
 # ── 6. Inicia o app ───────────────────────────────────────────
 app <- source(file.path(app_root, "app.R"), local = new.env())$value
