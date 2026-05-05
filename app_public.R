@@ -39,17 +39,21 @@ if (!exists("carregar_dados_app")) {
   source(file.path(APP_ROOT, "R", "gdrive_public.R"), local = FALSE)
 }
 
-APP_DATA <- tryCatch(
-  carregar_dados_app(
-    file_id = DRIVE_FILE_ID,
-    folder_id = DRIVE_FOLDER_ID,
-    forcar_dl = TRUE,
-    forcar_etl = TRUE
-  ),
-  error = function(e) {
-    structure(list(), erro_msg = e$message)
-  }
-)
+# Usa APP_DATA_GLOBAL pré-aquecido pelo run.R (não bloqueia a porta).
+# Fallback: tenta carregar localmente se o global ainda não estiver pronto.
+APP_DATA <- if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+  APP_DATA_GLOBAL
+} else {
+  tryCatch(
+    carregar_dados_app(
+      file_id    = DRIVE_FILE_ID,
+      folder_id  = DRIVE_FOLDER_ID,
+      forcar_dl  = FALSE,
+      forcar_etl = FALSE
+    ),
+    error = function(e) structure(list(), erro_msg = e$message)
+  )
+}
 
 `%||%` <- function(x, y) {
   if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
@@ -346,15 +350,11 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
 server <- function(input, output, session) {
   
   rv <- reactiveValues(
-    app_data    = tryCatch(
-      carregar_dados_app(
-        file_id    = DRIVE_FILE_ID,
-        folder_id  = DRIVE_FOLDER_ID,
-        forcar_dl  = FALSE,
-        forcar_etl = FALSE
-      ),
-      error = function(e) structure(list(), erro_msg = e$message)
-    ),
+    app_data    = if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+      APP_DATA_GLOBAL
+    } else {
+      structure(list(), erro_msg = "Carregando dados, aguarde...")
+    },
     syncing     = FALSE,
     sync_status = "ok",
     last_sync   = {
@@ -462,6 +462,15 @@ server <- function(input, output, session) {
         tags$button(class = "sync-btn",
                     onclick = "Shiny.setInputValue(\'btn_sync\', Math.random())",
                     if (rv$syncing) "\u23f3 Aguarde..." else "\u21bb Atualizar dados"))
+  })
+  
+  # Polling: detecta quando APP_DATA_GLOBAL fica pronto apos boot assincrono
+  observe({
+    invalidateLater(3000, session)
+    if (length(rv$app_data) == 0 &&
+        exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+      rv$app_data <- APP_DATA_GLOBAL
+    }
   })
   
   observeEvent(input$btn_sync, {
