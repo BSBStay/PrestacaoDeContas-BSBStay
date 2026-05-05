@@ -878,7 +878,7 @@ auth_tem_senha <- function(cpf_cnpj, con = NULL) {
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
   
   auth_ensure_table(con)
-  cpf_norm <- trimws(as.character(cpf_cnpj))
+  cpf_norm <- gsub("[^0-9]", "", as.character(cpf_cnpj))
   
   res <- tryCatch(
     DBI::dbGetQuery(con,
@@ -896,7 +896,7 @@ auth_set_senha <- function(cpf_cnpj, senha, con = NULL) {
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
   
   auth_ensure_table(con)
-  cpf_norm <- trimws(as.character(cpf_cnpj))
+  cpf_norm <- gsub("[^0-9]", "", as.character(cpf_cnpj))
   hash     <- auth_hash(senha, cpf_norm)
   agora    <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   
@@ -919,7 +919,7 @@ auth_check_senha <- function(cpf_cnpj, senha, con = NULL) {
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
   
   auth_ensure_table(con)
-  cpf_norm <- trimws(as.character(cpf_cnpj))
+  cpf_norm <- gsub("[^0-9]", "", as.character(cpf_cnpj))
   
   res <- tryCatch(
     DBI::dbGetQuery(con,

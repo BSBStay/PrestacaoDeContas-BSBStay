@@ -40,6 +40,8 @@ doc_tipo <- function(x) {
   if (is_valid_cnpj_mask(x)) return("CNPJ")
   NA_character_
 }
+# Extrai apenas os dígitos — base de todas as comparações de documento
+only_digits <- function(x) gsub("[^0-9]", "", as.character(x %||% ""))
 
 ADMIN_USER <- Sys.getenv("BSBSTAY_ADMIN_USER", "admin")
 ADMIN_PASS <- Sys.getenv("BSBSTAY_ADMIN_PASS", "bsbstay123")
@@ -62,8 +64,9 @@ auth_registry <- tryCatch({
         tipo_documento    = ifelse(is_valid_cpf_mask(cpf_cnpj), "CPF",
                                    ifelse(is_valid_cnpj_mask(cpf_cnpj), "CNPJ", NA_character_))
       ) |>
-      dplyr::filter(!is.na(cpf_cnpj), nzchar(cpf_cnpj)) |>
-      dplyr::distinct(cpf_cnpj, .keep_all = TRUE)
+      dplyr::mutate(digits = only_digits(cpf_cnpj)) |>
+      dplyr::filter(!is.na(cpf_cnpj), nzchar(cpf_cnpj), nzchar(digits)) |>
+      dplyr::distinct(digits, .keep_all = TRUE)
   }
 }, error = function(e) {
   message("[App] Erro ao carregar auth_registry: ", e$message)
@@ -337,7 +340,7 @@ server <- function(input, output, session) {
     }
     
     # Verificar se está no registro
-    hit <- auth_registry[auth_registry$cpf_cnpj == doc_raw, , drop = FALSE]
+    hit <- auth_registry[auth_registry$digits == only_digits(doc_raw), , drop = FALSE]
     if (nrow(hit) == 0) {
       output$login_msg <- renderUI(div(class="auth-err",
                                        "⚠ Documento não encontrado. Verifique a pontuação ou entre em contato com a BSBStay."))
@@ -385,7 +388,7 @@ server <- function(input, output, session) {
     }
     
     # Verificar se está no cadastro
-    hit <- auth_registry[auth_registry$cpf_cnpj == doc_raw, , drop = FALSE]
+    hit <- auth_registry[auth_registry$digits == only_digits(doc_raw), , drop = FALSE]
     if (nrow(hit) == 0) {
       output$cadastro_msg <- renderUI(div(class="auth-err",
                                           "⚠ Documento não encontrado no sistema. Entre em contato com a BSBStay."))
