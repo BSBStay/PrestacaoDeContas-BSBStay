@@ -41,18 +41,12 @@ if (!exists("carregar_dados_app")) {
 
 # Usa APP_DATA_GLOBAL pré-aquecido pelo run.R (não bloqueia a porta).
 # Fallback: tenta carregar localmente se o global ainda não estiver pronto.
+# APP_DATA_GLOBAL é populado pelo run.R (Etapa A = SQLite local, Etapa B = Drive).
+# Nunca fazemos download bloqueante aqui — o login ficaria travado.
 APP_DATA <- if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
   APP_DATA_GLOBAL
 } else {
-  tryCatch(
-    carregar_dados_app(
-      file_id    = DRIVE_FILE_ID,
-      folder_id  = DRIVE_FOLDER_ID,
-      forcar_dl  = FALSE,
-      forcar_etl = FALSE
-    ),
-    error = function(e) structure(list(), erro_msg = e$message)
-  )
+  structure(list(), erro_msg = "Dados ainda carregando, aguarde...")
 }
 
 `%||%` <- function(x, y) {
@@ -350,10 +344,15 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
 server <- function(input, output, session) {
   
   rv <- reactiveValues(
+    # APP_DATA_GLOBAL já está pronto (Etapa A do run.R carregou do SQLite).
+    # Se ainda estiver vazio (fresh deploy sem SQLite), o polling de 3s
+    # detecta a conclusão da Etapa B e atualiza rv$app_data automaticamente.
     app_data    = if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
       APP_DATA_GLOBAL
+    } else if (exists("APP_DATA") && length(APP_DATA) > 0) {
+      APP_DATA
     } else {
-      structure(list(), erro_msg = "Carregando dados, aguarde...")
+      structure(list(), erro_msg = "Dados ainda carregando, aguarde...")
     },
     syncing     = FALSE,
     sync_status = "ok",
@@ -464,12 +463,18 @@ server <- function(input, output, session) {
                     if (rv$syncing) "\u23f3 Aguarde..." else "\u21bb Atualizar dados"))
   })
   
-  # Polling: detecta quando APP_DATA_GLOBAL fica pronto apos boot assincrono
+  # Polling: sincroniza rv$app_data com APP_DATA_GLOBAL
+  # Cobre dois cenários:
+  #   1. Fresh deploy sem SQLite: rv$app_data vazio, Etapa B ainda baixando
+  #   2. Etapa B concluiu e atualizou APP_DATA_GLOBAL com dados mais recentes
   observe({
-    invalidateLater(3000, session)
-    if (length(rv$app_data) == 0 &&
-        exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
-      rv$app_data <- APP_DATA_GLOBAL
+    invalidateLater(2000, session)
+    if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+      # Atualiza sempre que APP_DATA_GLOBAL for mais novo (mais proprietários)
+      if (length(rv$app_data) == 0 ||
+          length(APP_DATA_GLOBAL) != length(rv$app_data)) {
+        rv$app_data <- APP_DATA_GLOBAL
+      }
     }
   })
   
@@ -1186,7 +1191,7 @@ server <- function(input, output, session) {
         `Manutenção`      = paste0("- ", brl(dplyr::coalesce(as.numeric(manutencao_total), 0))),
         `Reposição`       = paste0("- ", brl(dplyr::coalesce(as.numeric(reposicao_total), 0))),
         `Despesas`        = paste0("- ", brl(dplyr::coalesce(as.numeric(despesas_total), 0))),
-        `Custos Totais`   = paste0("- ", brl(outros_custos)),
+        `Outros Custos`   = paste0("- ", brl(outros_custos)),
         `Resultado Líq`   = brl(resultado_liq),
         `% Custo/Receita` = paste0(round(ifelse(receita_bruta > 0, outros_custos/receita_bruta*100, 0)), "%")
       )

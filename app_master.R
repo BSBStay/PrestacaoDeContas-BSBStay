@@ -102,18 +102,12 @@ insight_card <- function(ico, titulo, corpo, cor = "blue") {
 }
 
 # ── Carregamento inicial ────────────────────────────────────────
-APP_DATA <- tryCatch(
-  carregar_dados_app(
-    file_id    = DRIVE_FILE_ID,
-    folder_id  = DRIVE_FOLDER_ID,
-    forcar_dl  = FALSE,
-    forcar_etl = FALSE
-  ),
-  error = function(e) {
-    message("[Master] Erro no carregamento: ", e$message)
-    structure(list(), erro_msg = e$message)
-  }
-)
+# APP_DATA_GLOBAL populado pelo run.R. Sem download bloqueante aqui.
+APP_DATA <- if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+  APP_DATA_GLOBAL
+} else {
+  structure(list(), erro_msg = "Dados ainda carregando, aguarde...")
+}
 
 # Extrai dados flat de todos os proprietários (para aba Carteira)
 build_carteira_flat <- function(app_data) {
@@ -379,6 +373,17 @@ server <- function(input, output, session) {
   
   observeEvent(input$btn_aba,    { rv$aba    <- input$btn_aba    }, ignoreInit = TRUE)
   observeEvent(input$btn_aba_op, { rv$op_aba <- input$btn_aba_op }, ignoreInit = TRUE)
+  
+  # Polling: sincroniza rv$app_data com APP_DATA_GLOBAL (Etapa B do run.R)
+  observe({
+    invalidateLater(2000, session)
+    if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+      if (length(rv$app_data) == 0 ||
+          length(APP_DATA_GLOBAL) != length(rv$app_data)) {
+        rv$app_data <- APP_DATA_GLOBAL
+      }
+    }
+  })
   
   # ── Header stats ─────────────────────────────────────────────
   output$hdr_stats <- renderUI({
@@ -1277,7 +1282,7 @@ server <- function(input, output, session) {
         `Manutenção`      = paste0("- ", brl(dplyr::coalesce(as.numeric(manutencao_total), 0))),
         `Reposição`       = paste0("- ", brl(dplyr::coalesce(as.numeric(reposicao_total), 0))),
         `Despesas`        = paste0("- ", brl(dplyr::coalesce(as.numeric(despesas_total), 0))),
-        `Custos Totais`   = paste0("- ", brl(outros_custos)),
+        `Outros Custos`   = paste0("- ", brl(outros_custos)),
         `Resultado Líq`   = brl(resultado_liq),
         `% Custo/Receita` = paste0(round(ifelse(receita_bruta > 0, outros_custos/receita_bruta*100, 0)), "%")
       )
@@ -1445,7 +1450,7 @@ server <- function(input, output, session) {
   # OUTPUT: Resultado financeiro
   # ═══════════════════════════════════════════════════════════
   output$resultado <- renderUI({
-    m <- rm()
+    m <- rm_mes()
     div(
       frow("Receita Bruta",        brl(m$receita_bruta), FALSE),
       frow("Taxa Administrativa",  paste0("- ", brl(m$taxa_adm)),      TRUE),

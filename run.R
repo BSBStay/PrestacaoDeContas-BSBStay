@@ -39,25 +39,57 @@ suppressPackageStartupMessages({ library(shiny); library(later) })
 # antes de fazer source novamente, evitando cargas duplas.
 source(file.path(app_root, "R", "gdrive_public.R"), local = FALSE)
 
-# ── 5. Pré-aquecimento do cache (boot-time) ───────────────────
-# forcar_dl=FALSE: só baixa se o cache for inexistente ou velho.
-# O resultado é guardado em APP_DATA_GLOBAL para os módulos filhos.
-message("[run.R] Iniciando pré-aquecimento do cache...")
+# ── 5. Pré-aquecimento em 2 etapas ──────────────────────────
+#
+# Etapa A (síncrona, antes de abrir a porta):
+#   Tenta carregar APENAS do SQLite local (forcar_dl=FALSE, sem network).
+#   Se o SQLite existir, é rápido (~1-2s) e a porta abre no prazo do Render.
+#   Se não existir ainda (fresh deploy), APP_DATA_GLOBAL fica vazio.
+#
+# Etapa B (assíncrona, após a porta abrir):
+#   Baixa o xlsx do Drive e reprocessa o ETL.
+#   Atualiza APP_DATA_GLOBAL. O polling de 3s no app_public detecta e popula rv$app_data.
+
+message("[run.R] Etapa A — carregando do cache local (sem network)...")
 APP_DATA_GLOBAL <<- tryCatch(
   carregar_dados_app(
     file_id    = DRIVE_FILE_ID,
     folder_id  = DRIVE_FOLDER_ID,
-    forcar_dl  = FALSE,
-    forcar_etl = FALSE
+    forcar_dl  = FALSE,   # NÃO baixa o Drive agora
+    forcar_etl = FALSE    # usa SQLite se existir
   ),
   error = function(e) {
-    message("[run.R] AVISO cache: ", e$message,
-            " — app tentará na primeira sessão.")
+    message("[run.R] Cache local indisponível: ", e$message)
     structure(list(), erro_msg = e$message)
   }
 )
-message(sprintf("[run.R] Cache pronto: %d proprietário(s).", length(APP_DATA_GLOBAL)))
+message(sprintf("[run.R] Etapa A concluída: %d proprietário(s) em cache.", length(APP_DATA_GLOBAL)))
 
-# ── 6. Inicia o app ───────────────────────────────────────────
+# ── 6. Inicia o app (porta abre aqui) ────────────────────────
 app <- source(file.path(app_root, "app.R"), local = new.env())$value
+
+# ── 7. Etapa B — atualização do Drive em background ──────────
+# Executa APÓS o print(app) iniciar o servidor Shiny.
+# later::later garante que roda dentro do event loop do Shiny,
+# atualizando APP_DATA_GLOBAL sem bloquear nenhuma sessão ativa.
+later::later(function() {
+  message("[run.R] Etapa B — baixando dados atualizados do Drive...")
+  novo <- tryCatch(
+    carregar_dados_app(
+      file_id    = DRIVE_FILE_ID,
+      folder_id  = DRIVE_FOLDER_ID,
+      forcar_dl  = TRUE,    # força download do Drive
+      forcar_etl = TRUE     # reprocessa ETL
+    ),
+    error = function(e) {
+      message("[run.R] Etapa B falhou: ", e$message)
+      NULL
+    }
+  )
+  if (!is.null(novo) && length(novo) > 0) {
+    APP_DATA_GLOBAL <<- novo
+    message(sprintf("[run.R] Etapa B concluída: %d proprietário(s) atualizados.", length(APP_DATA_GLOBAL)))
+  }
+}, delay = 1)
+
 print(app)

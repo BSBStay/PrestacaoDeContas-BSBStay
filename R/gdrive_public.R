@@ -493,8 +493,11 @@ montar_objeto_app_sqlite <- function(con) {
         imovel        = as.character(nome_canonico),
         receita_bruta = dplyr::coalesce(as.numeric(receita_liquida), 0),
         taxa_adm      = dplyr::coalesce(as.numeric(tx_adm), 0),
-        outros_custos = dplyr::coalesce(as.numeric(custos_total), 0),
-        resultado_liq = dplyr::coalesce(as.numeric(resultado), 0),
+        outros_custos     = dplyr::coalesce(as.numeric(custos_total), 0),
+        manutencao_total  = dplyr::coalesce(as.numeric(manutencao_total), 0),
+        reposicao_total   = dplyr::coalesce(as.numeric(reposicao_total), 0),
+        despesas_total    = dplyr::coalesce(as.numeric(despesas_total), 0),
+        resultado_liq     = dplyr::coalesce(as.numeric(resultado), 0),
         ocupacao      = round(dplyr::coalesce(as.numeric(taxa_ocupacao), 0) * 100),
         diaria_media  = dplyr::coalesce(as.numeric(diaria_media), 0),
         n_diarias     = dplyr::coalesce(suppressWarnings(as.integer(as.numeric(noites_no_mes))), 0L)
