@@ -49,13 +49,18 @@ COPY . .
 # conforme APP_CACHE_DIR. data/raw pode conter xlsx de fallback.
 RUN mkdir -p data/raw
 
-# ── Permissões: /tmp já é gravável; cria subdir do cache ─────
-RUN mkdir -p /tmp/bsbstay_cache && chmod 777 /tmp/bsbstay_cache
+# ── Diretório de dados persistente (Render Disk monta em /data) ─
+# Em produção (Render Starter), /data é um disco persistente montado
+# via render.yaml. O mkdir aqui garante que o build não falha mesmo
+# sem o disco (ex: ambiente local ou PR preview).
+# Em runtime, o Render sobrescreve /data com o volume real.
+RUN mkdir -p /data/bsbstay && chmod 777 /data/bsbstay \
+ && mkdir -p /tmp/bsbstay_cache && chmod 777 /tmp/bsbstay_cache
 
 # ── Variáveis de ambiente padrão ─────────────────────────────
 # Sobrescritas pelas envVars do render.yaml / painel do Render.
 ENV APP_ROOT=/opt/render/project/src \
-    APP_CACHE_DIR=/tmp/bsbstay_cache \
+    APP_CACHE_DIR=/data/bsbstay \
     APP_MODE=public \
     MAX_CACHE_AGE_H=6 \
     PORT=3838
@@ -63,7 +68,7 @@ ENV APP_ROOT=/opt/render/project/src \
 # ── Healthcheck ───────────────────────────────────────────────
 # Render verifica se a porta está respondendo.
 # O app pode demorar ~60s no cold start (download do Drive).
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
   CMD curl -sf http://localhost:${PORT} || exit 1
 
 EXPOSE 3838

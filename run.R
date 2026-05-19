@@ -18,11 +18,26 @@ options(
 # /opt/render/project/src é read-only após o build.
 # Dados mutáveis (SQLite, xlsx cache) devem ir para /tmp.
 app_root  <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork = FALSE)
-cache_dir <- Sys.getenv("APP_CACHE_DIR", "/tmp/bsbstay_cache")
-raw_dir   <- Sys.getenv("APP_RAW_DIR",   file.path(app_root, "data", "raw"))
+raw_dir   <- Sys.getenv("APP_RAW_DIR", file.path(app_root, "data", "raw"))
 
-dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
-dir.create(raw_dir,   recursive = TRUE, showWarnings = FALSE)
+# Disco persistente em /data/bsbstay (Render Starter).
+# Fallback para /tmp/bsbstay_cache em ambiente local ou deploys sem disco.
+cache_dir <- {
+  pref <- Sys.getenv("APP_CACHE_DIR", "/data/bsbstay")
+  # Tenta criar o preferido; se falhar (sem permissão = sem disco), usa /tmp
+  ok <- tryCatch({
+    dir.create(pref, recursive = TRUE, showWarnings = FALSE)
+    file.access(pref, mode = 2) == 0   # modo 2 = gravável
+  }, error = function(e) FALSE)
+  if (ok) pref else {
+    message("[run.R] /data indisponível — usando fallback /tmp/bsbstay_cache")
+    tmp <- "/tmp/bsbstay_cache"
+    dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
+    tmp
+  }
+}
+
+dir.create(raw_dir, recursive = TRUE, showWarnings = FALSE)
 
 Sys.setenv(APP_CACHE_DIR = cache_dir)
 Sys.setenv(APP_RAW_DIR   = raw_dir)
