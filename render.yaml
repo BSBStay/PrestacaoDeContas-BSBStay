@@ -2,15 +2,9 @@ services:
   - type: web
     name: bsbstay-shiny
     runtime: docker
-    plan: starter                  
+    plan: free
     autoDeploy: true
-    disk:
-      name: bsbstay-data
-      mountPath: /data             
-      sizeGB: 1                    
     envVars:
-      - key: APP_CACHE_DIR
-        value: /data/bsbstay       
       - key: APP_MODE
         value: public
       - key: MAX_CACHE_AGE_H
@@ -19,7 +13,10 @@ services:
         value: 1fnereY6JOrAbSl1yw_o_U94Fb0KTuHGJU85GEUrCBiU
       - key: DRIVE_FOLDER_ID
         value: 1753AZxwmyyWYS2oYQPLeMHIz5gM8bscb
+      # ── Credenciais admin — ALTERE no painel do Render ──────
+      # Nunca commite senhas reais aqui; use "generateValue: true"
+      # ou defina manualmente no dashboard do Render.com
       - key: BSBSTAY_ADMIN_USER
         value: admin
       - key: BSBSTAY_ADMIN_PASS
-        generateValue: true        # Render gera automaticamente; anote no primeiro deploy
+        generateValue: true   # Render gera automaticamente; anote no primeiro deploy
