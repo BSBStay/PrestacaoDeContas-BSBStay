@@ -2,9 +2,15 @@ services:
   - type: web
     name: bsbstay-shiny
     runtime: docker
-    plan: free
+    plan: starter                  # Plano pago — habilita disco persistente
     autoDeploy: true
+    disk:
+      name: bsbstay-data
+      mountPath: /data             # Ponto de montagem persistente
+      sizeGB: 1                    # 1 GB (~R$ 1,50/mês) — suficiente para SQLite + xlsx
     envVars:
+      - key: APP_CACHE_DIR
+        value: /data/bsbstay       # SQLite e xlsx ficam no disco persistente
       - key: APP_MODE
         value: public
       - key: MAX_CACHE_AGE_H
@@ -14,9 +20,8 @@ services:
       - key: DRIVE_FOLDER_ID
         value: 1753AZxwmyyWYS2oYQPLeMHIz5gM8bscb
       # ── Credenciais admin — ALTERE no painel do Render ──────
-      # Nunca commite senhas reais aqui; use "generateValue: true"
-      # ou defina manualmente no dashboard do Render.com
+      # Nunca commite senhas reais aqui.
       - key: BSBSTAY_ADMIN_USER
         value: admin
       - key: BSBSTAY_ADMIN_PASS
-        generateValue: true   # Render gera automaticamente; anote no primeiro deploy
+        generateValue: true        # Render gera automaticamente; anote no primeiro deploy
