@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN R -q -e "install.packages(c( \
     'shiny','dplyr','tidyr','lubridate','readxl','janitor', \
     'plotly','DT','DBI','RSQLite','shinycssloaders','stringr', \
-    'htmlwidgets','bslib','digest','later','htmltools','openxlsx' \
+    'htmlwidgets','bslib','digest','later','htmltools' \
   ), repos='https://cloud.r-project.org', Ncpus=parallel::detectCores())"
 
 # ── Diretório de trabalho ─────────────────────────────────────
@@ -73,4 +73,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
 
 EXPOSE 3838
 
-CMD ["R", "-q", "-f", "/opt/render/project/src/run.R"] 
+CMD ["R", "-q", "-f", "/opt/render/project/src/run.R"]
