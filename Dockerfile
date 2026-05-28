@@ -3,38 +3,54 @@
 # Otimizado para Render.com (Docker runtime)
 # ============================================================
 
-FROM rocker/r-ver:4.3.3
+FROM rocker/r-ver:4.3.1
+
+RUN apt-get update && apt-get install -y 
+libcurl4-openssl-dev 
+libssl-dev 
+libxml2-dev 
+libfontconfig1-dev 
+libcairo2-dev 
+libsqlite3-dev 
+libjpeg-dev 
+libpng-dev 
+libxt-dev 
+libuv1-dev 
+&& rm -rf /var/lib/apt/lists/*
+
+
+## FROM rocker/r-ver:4.3.3
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ── Dependências do sistema ───────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    libxml2-dev \
-    libfontconfig1-dev \
-    libcairo2-dev \
-    libxt-dev \
-    libsqlite3-dev \
-    libharfbuzz-dev \
-    libfribidi-dev \
-    libfreetype6-dev \
-    libpng-dev \
-    libtiff5-dev \
-    libjpeg-dev \
-    zlib1g-dev \
-    pandoc \
-    make \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#    libcurl4-openssl-dev \
+ #   libssl-dev \
+  #  libxml2-dev \
+   # libfontconfig1-dev \
+#    libcairo2-dev \
+#    libxt-dev \
+#    libsqlite3-dev \
+#    libharfbuzz-dev \
+#    libfribidi-dev \
+#    libfreetype6-dev \
+#    libpng-dev \
+#    libtiff5-dev \
+#    libjpeg-dev \
+#    zlib1g-dev \
+#    pandoc \
+#    make \
+#    g++ \
+#    curl \
+#    && rm -rf /var/lib/apt/lists/*
 
 # ── Pacotes R ─────────────────────────────────────────────────
 # Instalados em camada separada para melhor cache de build.
 RUN R -q -e "install.packages(c( \
     'shiny','dplyr','tidyr','lubridate','readxl','janitor', \
     'plotly','DT','DBI','RSQLite','shinycssloaders','stringr', \
-    'htmlwidgets','bslib','digest','later','htmltools' \
+    'htmlwidgets','bslib','digest','later','htmltools','openxlsx' \
   ), repos='https://cloud.r-project.org', Ncpus=parallel::detectCores())"
 
 # ── Diretório de trabalho ─────────────────────────────────────
