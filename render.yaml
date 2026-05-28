@@ -2,6 +2,7 @@ services:
   - type: web
     name: bsbstay-shiny
     runtime: docker
+    dockerfilePath: ./Dockerfile       # caminho explícito — evita Render ignorar
     plan: starter                  # Plano pago — habilita disco persistente
     autoDeploy: true
     disk:
