@@ -2,3 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+
+# Apenas para ShinyApps — não commitar no Render
+DESCRIPTION
+renv.lock
