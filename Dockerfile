@@ -73,4 +73,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
 
 EXPOSE 3838
 
-CMD ["R", "-q", "-f", "/opt/render/project/src/run.R"]
+CMD ["R", "-q", "-f", "/opt/render/project/src/run.R"] 
