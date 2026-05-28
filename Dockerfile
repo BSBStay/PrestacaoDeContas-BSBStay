@@ -1,3 +1,4 @@
+
 # ============================================================
 # Dockerfile — BSBStay Shiny App
 # Otimizado para Render.com (Docker runtime)
@@ -23,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtiff5-dev \
     libjpeg-dev \
     zlib1g-dev \
+    libuv1-dev \
     pandoc \
     make \
     g++ \
@@ -30,7 +32,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Pacotes R ─────────────────────────────────────────────────
-# Instalados em camada separada para melhor cache de build.
 RUN R -q -e "install.packages(c( \
     'shiny','dplyr','tidyr','lubridate','readxl','janitor', \
     'plotly','DT','DBI','RSQLite','shinycssloaders','stringr', \
@@ -41,24 +42,15 @@ RUN R -q -e "install.packages(c( \
 WORKDIR /opt/render/project/src
 
 # ── Copia o código-fonte ──────────────────────────────────────
-# .dockerignore exclui: *.sqlite, *.xlsx, .Rproj.user, *.zip
 COPY . .
 
-# ── Diretórios de dados no código (somente para data/raw) ─────
-# O cache mutável (SQLite + xlsx) vai para /tmp em runtime,
-# conforme APP_CACHE_DIR. data/raw pode conter xlsx de fallback.
+# ── Diretórios locais ─────────────────────────────────────────
 RUN mkdir -p data/raw
 
-# ── Diretório de dados persistente (Render Disk monta em /data) ─
-# Em produção (Render Starter), /data é um disco persistente montado
-# via render.yaml. O mkdir aqui garante que o build não falha mesmo
-# sem o disco (ex: ambiente local ou PR preview).
-# Em runtime, o Render sobrescreve /data com o volume real.
 RUN mkdir -p /data/bsbstay && chmod 777 /data/bsbstay \
  && mkdir -p /tmp/bsbstay_cache && chmod 777 /tmp/bsbstay_cache
 
-# ── Variáveis de ambiente padrão ─────────────────────────────
-# Sobrescritas pelas envVars do render.yaml / painel do Render.
+# ── Variáveis de ambiente ─────────────────────────────────────
 ENV APP_ROOT=/opt/render/project/src \
     APP_CACHE_DIR=/data/bsbstay \
     APP_MODE=public \
@@ -66,11 +58,10 @@ ENV APP_ROOT=/opt/render/project/src \
     PORT=3838
 
 # ── Healthcheck ───────────────────────────────────────────────
-# Render verifica se a porta está respondendo.
-# O app pode demorar ~60s no cold start (download do Drive).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
   CMD curl -sf http://localhost:${PORT} || exit 1
 
 EXPOSE 3838
 
 CMD ["R", "-q", "-f", "/opt/render/project/src/run.R"]
+
