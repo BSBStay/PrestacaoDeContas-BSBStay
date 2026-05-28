@@ -3,7 +3,7 @@
 # Otimizado para Render.com (Docker runtime)
 # ============================================================
 
-FROM rocker/r-ver:4.3.1
+FROM rocker/r-ver:4.3.3
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN R -q -e "install.packages(c( \
     'shiny','dplyr','tidyr','lubridate','readxl','janitor', \
     'plotly','DT','DBI','RSQLite','shinycssloaders','stringr', \
-    'htmlwidgets','bslib','digest','later','htmltools' \
+    'htmlwidgets','bslib','digest','later','htmltools','openxlsx' \
   ), repos='https://cloud.r-project.org', Ncpus=parallel::detectCores())"
 
 # ── Diretório de trabalho ─────────────────────────────────────
