@@ -148,21 +148,27 @@ body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#1e2d3d;font-size:1
 a{color:inherit;text-decoration:none;}
 
 /* ══ HEADER ═════════════════════════════════════════════════ */
-.hdr{background:#0f1c2e;padding:14px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25);}
-.hdr-left{display:flex;align-items:center;gap:14px;}
-.hdr-logo-img{height:52px;width:auto;display:block;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.25);background:#fff;}
-.hdr-title{color:#fff;font-size:17px;font-weight:700;}
-.hdr-sub{color:#5a7a96;font-size:11px;margin-top:2px;}
-.hdr-prop{color:#7a9ab5;font-size:12px;text-align:right;line-height:1.5;}
-.hdr-prop b{color:#e2f0ff;}
-.hdr-badge{background:#1a3350;color:#5ab4ff;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.6px;display:inline-block;margin-top:4px;}
+.hdr{background:#0a1622;padding:0 32px;display:flex;align-items:stretch;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 0 rgba(255,255,255,.06),0 4px 20px rgba(0,0,0,.35);}
+.hdr-left{display:flex;align-items:center;gap:16px;padding:12px 0;}
+.hdr-logo-img{height:46px;width:auto;display:block;border-radius:8px;background:#fff;}
+.hdr-title{color:#f0f6ff;font-size:15px;font-weight:700;letter-spacing:-.2px;}
+.hdr-sub{color:#4a6580;font-size:10px;margin-top:3px;letter-spacing:.3px;}
+.master-badge{background:rgba(90,180,255,.1);color:#5ab4ff;border:1px solid rgba(90,180,255,.2);border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.8px;}
+/* Stats no header — texto branco legível sobre fundo escuro */
+.hdr-stats{display:flex;align-items:stretch;gap:0;margin-left:auto;}
+.hdr-stat{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:0 24px;border-left:1px solid rgba(255,255,255,.07);cursor:default;}
+.hdr-stat:last-child{padding-right:0;}
+.hdr-stat-val{font-size:18px;font-weight:800;color:#ffffff;line-height:1.1;}
+.hdr-stat-lbl{font-size:9px;font-weight:600;color:rgba(255,255,255,.35);letter-spacing:.8px;text-transform:uppercase;margin-top:3px;}
 
 /* ══ SYNC BAR ════════════════════════════════════════════════ */
-.sync-bar{background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:6px 32px;display:flex;align-items:center;gap:10px;font-size:11px;color:#6b7280;}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:#00b388;flex-shrink:0;}
-.sync-dot.old{background:#d97706;} .sync-dot.err{background:#e03e3e;}
-.sync-btn{background:none;border:1px solid #d1d5db;border-radius:6px;padding:3px 10px;font-size:11px;color:#374151;cursor:pointer;font-family:inherit;transition:all .15s;}
-.sync-btn:hover{background:#f3f4f6;}
+.sync-bar{background:#0f1c2e;border-bottom:1px solid rgba(255,255,255,.06);padding:0 32px;display:flex;align-items:center;gap:12px;font-size:11px;color:rgba(255,255,255,.4);height:36px;}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:#00b388;flex-shrink:0;box-shadow:0 0 6px rgba(0,179,136,.5);}
+.sync-dot.old{background:#d97706;box-shadow:0 0 6px rgba(217,119,6,.4);}
+.sync-dot.err{background:#e03e3e;box-shadow:0 0 6px rgba(224,62,62,.4);}
+.sync-bar span{color:rgba(255,255,255,.5);font-size:11px;}
+.sync-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:4px 12px;font-size:11px;color:rgba(255,255,255,.6);cursor:pointer;font-family:inherit;transition:all .15s;letter-spacing:.2px;}
+.sync-btn:hover{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2);}
 
 /* ══ CNPJ BAR ════════════════════════════════════════════════ */
 .cnpj-bar{background:#fff;padding:18px 32px;border-bottom:1px solid #e2e8f0;}
@@ -179,9 +185,16 @@ a{color:inherit;text-decoration:none;}
 .cnpj-ok{background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:10px;}
 .cnpj-hint{font-size:11px;color:#9ca3af;margin-top:8px;}
 
+/* ══ NAV TABS ════════════════════════════════════════════════ */
+.nav-tabs-master{display:flex;gap:2px;padding:0 32px;background:#0f1c2e;border-bottom:1px solid rgba(255,255,255,.06);}
+.nav-tab-master{padding:11px 18px;font-size:12px;font-weight:600;color:rgba(255,255,255,.4);cursor:pointer;border:none;background:none;font-family:'Inter',sans-serif;letter-spacing:.1px;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
+.nav-tab-master:hover{color:rgba(255,255,255,.75);}
+.nav-tab-master.active{color:#fff;border-bottom-color:#1a6ef7;}
+
 /* ══ FILTER BAR ══════════════════════════════════════════════ */
-.fbar{background:#fff;padding:10px 32px;border-bottom:2px solid #e8edf3;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
-.fbar-lbl{font-size:11px;color:#6b7280;font-weight:700;letter-spacing:.6px;}
+.fbar{background:#fff;padding:10px 32px;border-bottom:1px solid #eaeff5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.fbar-lbl{font-size:10px;color:#9aa5b4;font-weight:700;letter-spacing:.7px;text-transform:uppercase;white-space:nowrap;}
+.fbar-sep{width:1px;height:20px;background:#e5e9ef;margin:0 4px;}
 
 /* ══ CONTENT ═════════════════════════════════════════════════ */
 .content{padding:20px 32px 56px;max-width:1340px;margin:0 auto;}
@@ -333,6 +346,63 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
 .recv-wrap,.det-wrap{background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e9ef;box-shadow:0 1px 5px rgba(0,0,0,.04);margin-bottom:14px;}
 .recv-hdr,.det-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
 .recv-ttl,.det-ttl{font-size:14px;font-weight:700;color:#1e2d3d;}
+
+/* ══ MÓDULO GERENCIAL ════════════════════════════════════════ */
+.ger-header{background:linear-gradient(135deg,#0a1e36 0%,#0f2d4a 100%);border-radius:14px;padding:22px 28px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;}
+.ger-header-title{color:#fff;font-size:17px;font-weight:800;letter-spacing:-.3px;}
+.ger-header-sub{color:rgba(255,255,255,.5);font-size:12px;margin-top:3px;}
+.ger-stats{display:flex;gap:24px;}
+.ger-stat{text-align:right;}
+.ger-stat-val{font-size:22px;font-weight:800;color:#34d99e;}
+.ger-stat-lbl{font-size:10px;color:rgba(255,255,255,.45);font-weight:700;letter-spacing:.8px;text-transform:uppercase;}
+.ger-apto-card{background:#fff;border-radius:12px;border:1px solid #e5e9ef;box-shadow:0 1px 5px rgba(0,0,0,.04);margin-bottom:10px;overflow:hidden;transition:box-shadow .15s;}
+.ger-apto-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);}
+.ger-apto-card.pub{border-left:4px solid #00b388;}
+.ger-apto-card.pen{border-left:4px solid #f59e0b;}
+.ger-apto-card.rev{border-left:4px solid #3b82f6;}
+.ger-apto-hdr{display:flex;align-items:center;padding:14px 18px;gap:14px;cursor:pointer;user-select:none;}
+.ger-apto-hdr:hover{background:#fafbfc;}
+.ger-apto-nome{font-size:13px;font-weight:700;color:#0f1c2e;flex:1;}
+.ger-apto-rec{font-size:13px;font-weight:700;color:#0f1c2e;min-width:110px;text-align:right;}
+.ger-apto-res{font-size:12px;font-weight:700;min-width:110px;text-align:right;}
+.ger-apto-res.pos{color:#00b388;} .ger-apto-res.neg{color:#e03e3e;}
+.ger-status-pill{font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;white-space:nowrap;}
+.pill-pub{background:#d1fae5;color:#065f46;}
+.pill-pen{background:#fef3c7;color:#854d0e;}
+.pill-rev{background:#dbeafe;color:#1d4ed8;}
+.ger-toggle{font-size:11px;color:#9aa5b4;margin-left:8px;transition:transform .2s;}
+.ger-body{padding:0 18px 18px;border-top:1px solid #f3f6f9;}
+.ger-section{margin-top:16px;}
+.ger-sec-title{font-size:10px;font-weight:800;color:#9aa5b4;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.ger-sec-title::after{content:'';flex:1;height:1px;background:#f0f4f8;}
+.ger-field-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #fafbfc;}
+.ger-field-row:last-child{border:none;}
+.ger-field-lbl{font-size:12px;color:#374151;flex:1.5;}
+.ger-field-orig{font-size:12px;color:#9aa5b4;flex:1;text-align:right;}
+.ger-field-input{flex:1.2;}
+.ger-field-input input{border:1.5px solid #e2e8f0;border-radius:7px;padding:5px 10px;font-size:13px;font-weight:600;color:#0f1c2e;width:100%;font-family:'Inter',sans-serif;transition:border .15s;}
+.ger-field-input input:focus{border-color:#1a6ef7;outline:none;box-shadow:0 0 0 3px rgba(26,110,247,.1);}
+.ger-field-diff{font-size:11px;font-weight:700;min-width:64px;text-align:right;}
+.ger-field-diff.pos{color:#00b388;} .ger-field-diff.neg{color:#e03e3e;} .ger-field-diff.neu{color:#9aa5b4;}
+.ger-actions{display:flex;gap:10px;margin-top:18px;padding-top:14px;border-top:2px solid #f0f4f8;justify-content:flex-end;}
+.ger-btn{border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s;}
+.ger-btn-reset{background:#f3f4f6;color:#374151;} .ger-btn-reset:hover{background:#e5e7eb;}
+.ger-btn-pub{background:linear-gradient(135deg,#0a1e36,#1a6ef7);color:#fff;box-shadow:0 3px 10px rgba(26,110,247,.3);}
+.ger-btn-pub:hover{opacity:.92;box-shadow:0 4px 14px rgba(26,110,247,.4);}
+.ger-btn-pub:disabled{opacity:.45;cursor:not-allowed;}
+.ger-nota{width:100%;border:1.5px solid #e2e8f0;border-radius:7px;padding:8px 10px;font-size:12px;font-family:'Inter',sans-serif;resize:vertical;min-height:60px;color:#374151;}
+.ger-nota:focus{border-color:#1a6ef7;outline:none;}
+.ger-sumario{background:#f8fafc;border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px;}
+.ger-sum-item{font-size:11px;} .ger-sum-lbl{color:#9aa5b4;font-weight:700;letter-spacing:.5px;text-transform:uppercase;font-size:9px;}
+.ger-sum-val{font-size:14px;font-weight:800;color:#0f1c2e;margin-top:1px;}
+.ger-sum-val.g{color:#00b388;} .ger-sum-val.r{color:#e03e3e;}
+.ger-pub-confirm{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:10px;padding:14px 16px;margin-top:12px;display:flex;align-items:center;gap:12px;}
+.ger-pub-icon{font-size:22px;}
+.ger-pub-msg{font-size:12px;color:#166534;font-weight:600;}
+.ger-filter-bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+.ger-search{flex:1;min-width:200px;border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 12px;font-size:13px;font-family:'Inter',sans-serif;}
+.ger-search:focus{border-color:#1a6ef7;outline:none;}
+.ger-mes-lbl{font-size:11px;font-weight:700;color:#6b7280;letter-spacing:.6px;white-space:nowrap;}
     "))
   ),
   
@@ -345,7 +415,7 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
           ),
           div(div(class = "hdr-title", "Painel Mestre"),
               div(class = "hdr-sub",   "Controle e Validação Interno — BSBStay")),
-          div(class = "master-badge", "🔐 USO INTERNO")
+          div(class = "master-badge", "USO INTERNO")
       ),
       uiOutput("hdr_stats")
   ),
@@ -367,6 +437,9 @@ server <- function(input, output, session) {
     aba         = "proprietario",
     op_aba      = "despesas",
     syncing     = FALSE,
+    # Módulo Gerencial — estado de edições e publicações por (mes|apto)
+    ger_edits   = list(),      # lista: chave = "mes|apto", valor = lista de ajustes
+    ger_pub     = list(),      # lista: chave = "mes|apto", valor = TRUE/timestamp
     sync_status = "ok",
     last_sync   = tryCatch(status_cache(), error = function(e) list(last_sync = NA))$last_sync
   )
@@ -404,12 +477,14 @@ server <- function(input, output, session) {
   # ── Sync bar ─────────────────────────────────────────────────
   output$sync_bar <- renderUI({
     dot <- paste("sync-dot", rv$sync_status)
-    msg <- if (rv$syncing) "⏳ Sincronizando..." else if (!is.na(rv$last_sync))
-      paste0("✓ Última sincronização: ", rv$last_sync) else "⚠ Dados não sincronizados"
-    div(class = "sync-bar", div(class = dot), span(msg),
-        tags$button(class = "sync-btn",
+    msg <- if (rv$syncing) "Sincronizando..." else if (!is.na(rv$last_sync))
+      paste0("Última sincronização: ", rv$last_sync) else "Dados não sincronizados"
+    div(class = "sync-bar",
+        div(class = dot),
+        span(msg),
+        tags$button(class  = "sync-btn",
                     onclick = "Shiny.setInputValue('btn_sync', Math.random())",
-                    if (rv$syncing) "⏳ Aguarde..." else "↻ Atualizar dados"))
+                    if (rv$syncing) "Atualizando..." else "Atualizar dados"))
   })
   observeEvent(input$btn_sync, {
     rv$syncing <- TRUE
@@ -432,9 +507,10 @@ server <- function(input, output, session) {
   # ── Nav tabs ─────────────────────────────────────────────────
   output$nav_tabs <- renderUI({
     abas <- list(
-      list(id = "proprietario", lbl = "👤 Por Proprietário"),
-      list(id = "carteira",     lbl = "🏘 Visão da Carteira"),
-      list(id = "insights",     lbl = "💡 Insights & Proposta de Valor")
+      list(id = "proprietario", lbl = "Por Proprietário"),
+      list(id = "carteira",     lbl = "Visão da Carteira"),
+      list(id = "gerencial",    lbl = "Revisão Gerencial"),
+      list(id = "insights",     lbl = "Insights")
     )
     div(class = "nav-tabs-master",
         lapply(abas, function(a) tags$button(
@@ -458,17 +534,17 @@ server <- function(input, output, session) {
     tagList(
       div(id = "fbar_prop", class = "fbar",
           style = if (isolate(rv$aba) != "proprietario") "display:none" else "",
-          div(class = "fbar-lbl", "PROPRIETÁRIO:"),
+          div(class = "fbar-lbl", "PROPRIETÁRIO"),
           selectInput("prop_sel", NULL, choices = prop_nomes, selected = props[1], width = "260px"),
           div(class = "fbar-sep"),
-          div(class = "fbar-lbl", "MÊS:"),
+          div(class = "fbar-lbl", "MÊS"),
           selectInput("mes_sel", NULL, choices = character(0), width = "160px"),
           div(class = "fbar-sep"),
-          div(class = "fbar-lbl", "IMÓVEL:"),
+          div(class = "fbar-lbl", "IMÓVEL"),
           selectInput("imovel", NULL, choices = c("Todos os imóveis" = "all"), width = "220px")),
       div(id = "fbar_cart", class = "fbar",
           style = if (isolate(rv$aba) != "carteira") "display:none" else "",
-          div(class = "fbar-lbl", "MÊS:"),
+          div(class = "fbar-lbl", "MÊS"),
           selectInput("mes_cart", NULL, choices = meses_cart_lbl,
                       selected = meses_cart[1], width = "160px"))
     )
@@ -508,6 +584,7 @@ server <- function(input, output, session) {
     switch(rv$aba,
            "proprietario" = uiOutput("body_proprietario"),
            "carteira"     = uiOutput("body_carteira"),
+           "gerencial"    = uiOutput("body_gerencial"),
            "insights"     = uiOutput("body_insights"))
   })
   
@@ -1830,188 +1907,623 @@ server <- function(input, output, session) {
   # ═══════════════════════════════════════════════════════════
   # ABA 3 — INSIGHTS & PROPOSTA DE VALOR
   # ═══════════════════════════════════════════════════════════
-  output$body_insights <- renderUI({
-    tagList(
-      div(class="sec","DIAGNÓSTICO AUTOMÁTICO DA CARTEIRA"),
-      shinycssloaders::withSpinner(uiOutput("insights_auto"),type=4,color="#1a6ef7"),
-      
-      div(class="sec","OPORTUNIDADES IDENTIFICADAS"),
-      shinycssloaders::withSpinner(uiOutput("oportunidades"),type=4,color="#d97706"),
-      
-      div(class="sec","PROPOSTA DE VALOR BSBStay",div(class="sec-badge","Para apresentar ao proprietário")),
-      div(class="pv-grid",
-          div(class="pv-card",div(class="pv-icon","📈"),div(class="pv-title","Maximização de Receita"),
-              div(class="pv-body","Gestão profissional de preços dinâmicos baseada em sazonalidade, eventos e demanda em tempo real."),
-              shinycssloaders::withSpinner(uiOutput("pv_metric_receita"),type=4,color="#1a6ef7")),
-          div(class="pv-card",div(class="pv-icon","🔧"),div(class="pv-title","Manutenção Preventiva"),
-              div(class="pv-body","Acompanhamento de todas as ordens de serviço com histórico. Reduzimos o custo total com ação preventiva."),
-              shinycssloaders::withSpinner(uiOutput("pv_metric_manutencao"),type=4,color="#d97706")),
-          div(class="pv-card",div(class="pv-icon","🏆"),div(class="pv-title","Performance Comparativa"),
-              div(class="pv-body","O proprietário recebe benchmarks contra a carteira completa. Mostramos onde o imóvel está e o que pode melhorar."),
-              shinycssloaders::withSpinner(uiOutput("pv_metric_bench"),type=4,color="#00b388")),
-          div(class="pv-card",div(class="pv-icon","📊"),div(class="pv-title","Transparência Total"),
-              div(class="pv-body","Extrato detalhado com cada receita, despesa e reserva. O proprietário acessa em tempo real."),
-              div(class="pv-metric","✓ Relatório automático disponível")),
-          div(class="pv-card",div(class="pv-icon","💰"),div(class="pv-title","Controle de Custos"),
-              div(class="pv-body","Monitoramos cada despesa por categoria e imóvel, agindo antes que impactem o resultado."),
-              shinycssloaders::withSpinner(uiOutput("pv_metric_custos"),type=4,color="#7c3aed")),
-          div(class="pv-card",div(class="pv-icon","🌟"),div(class="pv-title","Resultado Líquido"),
-              div(class="pv-body","Foco em resultado líquido — não apenas receita. Gerenciamos a equação completa."),
-              shinycssloaders::withSpinner(uiOutput("pv_metric_resultado"),type=4,color="#00b388"))),
-      
-      div(class="sec","BENCHMARK — IMÓVEL VS. MÉDIA DA CARTEIRA"),
-      div(class="card",
-          div(class="card-hdr",div(class="card-ttl","Selecione um imóvel para comparar"),
-              span(class="badge badge-blue","Versus média da carteira")),
-          selectInput("bench_imovel",NULL,
-                      choices=c("Selecione..."="",
-                                setNames(unlist(lapply(rv$app_data,function(d) d$imoveis_ids)),
-                                         unlist(lapply(rv$app_data,function(d) d$imoveis_ids)))),
-                      width="300px"),
-          shinycssloaders::withSpinner(uiOutput("benchmark_imovel"),type=4,color="#1a6ef7")),
-      shinycssloaders::withSpinner(uiOutput("sec_benchmark_graficos"),type=4,color="#7c3aed")
+  # ═══════════════════════════════════════════════════════════
+  # ABA INSIGHTS — Motor analítico multiperíodo
+  # Análise: tendência linear, clustering k-means, score de
+  # saúde, detecção de anomalias vs. histórico próprio.
+  # Base: dez/2025 → abr/2026 (dados disponíveis no SQLite).
+  # ═══════════════════════════════════════════════════════════
+  
+  # ── Funções analíticas (base R, sem pacotes extras) ────────
+  
+  # Tendência linear: retorna slope normalizado (-1 a +1)
+  .trend_slope <- function(y) {
+    y <- as.numeric(y[!is.na(y)])
+    if (length(y) < 2) return(0)
+    x  <- seq_along(y)
+    m  <- mean(y); sx <- sd(x); sy <- sd(y)
+    if (sx == 0 || sy == 0) return(0)
+    r  <- cor(x, y)
+    round(r * (sy / m), 3)   # slope relativo à média
+  }
+  
+  # K-means simples (k=3) sobre 2 variáveis normalizadas
+  .kmeans_3 <- function(ocp, dar) {
+    df <- data.frame(o = as.numeric(ocp), d = as.numeric(dar))
+    df <- df[complete.cases(df) & df$o > 0, ]
+    if (nrow(df) < 6) return(rep(1L, nrow(df)))
+    df$o_n <- (df$o - mean(df$o)) / max(sd(df$o), 0.01)
+    df$d_n <- (df$d - mean(df$d)) / max(sd(df$d), 0.01)
+    set.seed(42)
+    km <- tryCatch(
+      kmeans(df[, c("o_n","d_n")], centers = 3, nstart = 10, iter.max = 50),
+      error = function(e) NULL
+    )
+    if (is.null(km)) return(rep(1L, nrow(df)))
+    # Reordenar clusters: 1=baixo, 2=médio, 3=alto (por soma ocp+dar)
+    scores <- tapply(df$o_n + df$d_n, km$cluster, mean)
+    ord    <- order(scores)
+    map    <- setNames(seq_along(ord), ord)
+    as.integer(map[as.character(km$cluster)])
+  }
+  
+  # Score de saúde 0–100 por imóvel
+  .health_score <- function(ocp, dar, ocp_med, dar_med, trend) {
+    s_ocp   <- min(100, max(0, (ocp   / max(ocp_med,  1)) * 40))
+    s_dar   <- min(40,  max(0, (dar   / max(dar_med,  1)) * 30))
+    s_trend <- min(20,  max(0, (trend + 1) * 10))
+    round(s_ocp + s_dar + s_trend)
+  }
+  
+  # ── Reactive: análise multiperíodo ─────────────────────────
+  ins_analise <- reactive({
+    flat <- build_carteira_flat(rv$app_data)
+    if (is.null(flat) || nrow(flat) == 0) return(NULL)
+    
+    flat <- flat |>
+      dplyr::mutate(
+        mes_chr      = substr(as.character(competencia), 1, 7),
+        receita_bruta = as.numeric(receita_bruta),
+        ocupacao      = as.numeric(ocupacao),
+        diaria_media  = as.numeric(diaria_media),
+        resultado_liq = as.numeric(resultado_liq),
+        outros_custos = as.numeric(outros_custos)
+      )
+    
+    # ── Estatísticas globais ──────────────────────────────────
+    meses_ord  <- sort(unique(flat$mes_chr))
+    n_meses    <- length(meses_ord)
+    ultimo_mes <- meses_ord[n_meses]
+    pen_mes    <- if (n_meses >= 2) meses_ord[n_meses - 1] else ultimo_mes
+    
+    mes_atual <- flat |> dplyr::filter(mes_chr == ultimo_mes)
+    mes_ant   <- flat |> dplyr::filter(mes_chr == pen_mes)
+    
+    ocp_med   <- mean(mes_atual$ocupacao,     na.rm = TRUE)
+    dar_med   <- mean(mes_atual$diaria_media, na.rm = TRUE)
+    rec_tot   <- sum(mes_atual$receita_bruta, na.rm = TRUE)
+    res_tot   <- sum(mes_atual$resultado_liq, na.rm = TRUE)
+    cus_tot   <- sum(mes_atual$outros_custos, na.rm = TRUE)
+    margem    <- if (rec_tot > 0) res_tot / rec_tot * 100 else 0
+    custo_r   <- if (rec_tot > 0) cus_tot / rec_tot * 100 else 0
+    
+    rec_ant   <- sum(mes_ant$receita_bruta,   na.rm = TRUE)
+    var_rec   <- if (rec_ant > 0) (rec_tot - rec_ant) / rec_ant * 100 else 0
+    
+    # ── Histórico por imóvel (imóveis com 2+ meses) ──────────
+    hist_im <- flat |>
+      dplyr::group_by(imovel, proprietario) |>
+      dplyr::summarise(
+        n_meses      = dplyr::n(),
+        ocp_media    = mean(ocupacao,      na.rm = TRUE),
+        dar_media    = mean(diaria_media,  na.rm = TRUE),
+        rec_media    = mean(receita_bruta, na.rm = TRUE),
+        rec_total    = sum(receita_bruta,  na.rm = TRUE),
+        trend_rec    = .trend_slope(receita_bruta),
+        trend_ocp    = .trend_slope(ocupacao),
+        ocp_ultimo   = dplyr::last(ocupacao[order(mes_chr)]),
+        dar_ultimo   = dplyr::last(diaria_media[order(mes_chr)]),
+        rec_ultimo   = dplyr::last(receita_bruta[order(mes_chr)]),
+        .groups      = "drop"
+      ) |>
+      dplyr::filter(n_meses >= 2)
+    
+    # ── Clustering k-means (ocupação × diária) ───────────────
+    km_labels <- .kmeans_3(hist_im$ocp_media, hist_im$dar_media)
+    hist_im$cluster <- km_labels
+    # Nomear clusters com base nos centróides
+    cl_ocp <- tapply(hist_im$ocp_media, hist_im$cluster, mean)
+    cl_dat <- tapply(hist_im$dar_media, hist_im$cluster, mean)
+    # Cluster com maior ocp E maior dar = Alta Performance
+    cl_score <- cl_ocp + cl_dat
+    cl_alto  <- as.integer(names(which.max(cl_score)))
+    cl_baixo <- as.integer(names(which.min(cl_score)))
+    cl_med   <- setdiff(1:3, c(cl_alto, cl_baixo))
+    cluster_nome <- c("1"="Atenção", "2"="Atenção", "3"="Atenção")
+    cluster_nome[as.character(cl_alto)]  <- "Alta Performance"
+    cluster_nome[as.character(cl_med)]   <- "Potencial"
+    cluster_nome[as.character(cl_baixo)] <- "Atenção"
+    hist_im$cluster_nome <- cluster_nome[as.character(hist_im$cluster)]
+    
+    # ── Score de saúde por imóvel ────────────────────────────
+    hist_im$score <- mapply(.health_score,
+                            hist_im$ocp_media, hist_im$dar_media,
+                            ocp_med, dar_med, hist_im$trend_rec)
+    
+    # ── Detecção de anomalias (queda vs. média própria) ──────
+    im_atual <- mes_atual |>
+      dplyr::select(imovel, ocupacao, diaria_media, receita_bruta, resultado_liq)
+    hist_im <- hist_im |>
+      dplyr::left_join(im_atual |> dplyr::rename(
+        ocp_atual = ocupacao, dar_atual = diaria_media,
+        rec_atual = receita_bruta, res_atual = resultado_liq
+      ), by = "imovel") |>
+      dplyr::mutate(
+        anomalia_rec = dplyr::if_else(
+          !is.na(rec_atual) & rec_media > 0,
+          (rec_atual - rec_media) / rec_media * 100, NA_real_),
+        anomalia_ocp = dplyr::if_else(
+          !is.na(ocp_atual) & ocp_media > 0,
+          (ocp_atual - ocp_media) / ocp_media * 100, NA_real_)
+      )
+    
+    list(
+      flat       = flat,
+      mes_atual  = mes_atual,
+      hist_im    = hist_im,
+      meses_ord  = meses_ord,
+      ultimo_mes = ultimo_mes,
+      n_meses    = n_meses,
+      # KPIs carteira
+      ocp_med    = ocp_med,
+      dar_med    = dar_med,
+      rec_tot    = rec_tot,
+      res_tot    = res_tot,
+      cus_tot    = cus_tot,
+      margem     = margem,
+      custo_r    = custo_r,
+      var_rec    = var_rec,
+      rec_ant    = rec_ant
     )
   })
   
-  output$insights_auto <- renderUI({
-    flat <- build_carteira_flat(rv$app_data)
-    if(nrow(flat)==0) return(p(class="sem-dados","Sem dados."))
-    ultimo <- max(flat$competencia,na.rm=TRUE)
-    mes    <- dplyr::filter(flat,competencia==ultimo)
-    ocp    <- mean(mes$ocupacao,na.rm=TRUE)
-    dar    <- mean(mes$diaria_media,na.rm=TRUE)
-    rec    <- sum(mes$receita_bruta,na.rm=TRUE)
-    res    <- sum(mes$resultado_liq,na.rm=TRUE)
-    cus    <- sum(mes$outros_custos,na.rm=TRUE)
-    custo_r <- if(rec>0) cus/rec*100 else 0
-    top    <- mes|>dplyr::slice_max(receita_bruta,n=1,with_ties=FALSE)
-    bot    <- mes|>dplyr::slice_min(ocupacao,n=1,with_ties=FALSE)
-    prem   <- mes|>dplyr::slice_max(diaria_media,n=1,with_ties=FALSE)
-    ab50   <- sum(mes$ocupacao<50,na.rm=TRUE)
-    margem <- if(rec>0) res/rec*100 else 0
-    div(class="insights-grid",
-        insight_card("📊",paste0("Carteira ativa: ",nrow(mes)," imóveis"),
-                     paste0("Ocupação média de ",round(ocp,1),"% e diária média de ",s_brl(dar)," no último período."),
-                     if(ocp>=65)"green" else if(ocp>=45)"blue" else "orange"),
-        insight_card("🏆",paste0("Top performer: ",top$imovel),
-                     paste0("Maior receita: ",s_brl_compact(top$receita_bruta)," com ",round(top$ocupacao),"% ocupação."),"blue"),
-        insight_card(if(custo_r>30)"⚠️" else "✅",paste0("Custo/Receita: ",round(custo_r,1),"%"),
-                     paste0("Custos representam ",round(custo_r,1),"% da receita bruta. ",
-                            if(custo_r>30)"Avaliar oportunidades de redução." else "Índice saudável."),
-                     if(custo_r>30)"orange" else "green"),
-        insight_card(if(ab50>0)"⚠️" else "✅",paste0(ab50," imóvel(is) com ocupação < 50%"),
-                     if(ab50>0) paste0("'",bot$imovel,"' teve apenas ",round(bot$ocupacao),"% de ocupação. Revisar precificação.")
-                     else "Todos os imóveis acima de 50% de ocupação no período.",
-                     if(ab50>0)"orange" else "green"),
-        insight_card("💎",paste0("Diária premium: ",prem$imovel),
-                     paste0("Maior diária: ",s_brl(prem$diaria_media)," — ",round(prem$ocupacao),"% de ocupação."),"purple"),
-        insight_card("💵",paste0("Resultado total: ",s_brl_compact(res)),
-                     paste0("Receita de ",s_brl_compact(rec)," com margem líquida de ",round(margem,1),"%."),
-                     if(margem>60)"green" else if(margem>40)"blue" else "red"))
+  # ── UI principal da aba Insights ───────────────────────────
+  output$body_insights <- renderUI({
+    a <- ins_analise()
+    if (is.null(a)) return(div(class="empty-state", h3("Sem dados."), p("Aguarde a sincronização.")))
+    
+    # Label do mês atual
+    mes_lbl <- tryCatch(
+      fmt_mes_pt(as.Date(paste0(a$ultimo_mes, "-01"))),
+      error = function(e) a$ultimo_mes)
+    
+    tagList(
+      # ── KPIs rápidos do mês ───────────────────────────────
+      div(style = "display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;",
+          .ins_kpi("Receita Total",     brl(a$rec_tot),
+                   paste0(ifelse(a$var_rec >= 0, "+", ""), round(a$var_rec, 1), "% vs. mês anterior"),
+                   if (a$var_rec >= 0) "green" else "red"),
+          .ins_kpi("Resultado Líquido", brl(a$res_tot),
+                   paste0("Margem de ", round(a$margem, 1), "%"),
+                   if (a$margem >= 60) "green" else if (a$margem >= 40) "blue" else "red"),
+          .ins_kpi("Ocupação Média",    paste0(round(a$ocp_med, 1), "%"),
+                   paste0(nrow(a$mes_atual), " imóveis no mês"),
+                   if (a$ocp_med >= 75) "green" else if (a$ocp_med >= 55) "blue" else "orange"),
+          .ins_kpi("Diária Média",      brl(a$dar_med),
+                   paste0(a$n_meses, " meses de histórico"),
+                   "blue"),
+          .ins_kpi("Custo / Receita",   paste0(round(a$custo_r, 1), "%"),
+                   if (a$custo_r <= 15) "Eficiência alta" else if (a$custo_r <= 30) "Nível saudável" else "Revisar custos",
+                   if (a$custo_r <= 15) "green" else if (a$custo_r <= 30) "blue" else "orange")
+      ),
+      
+      # ── Seção: diagnóstico analítico ─────────────────────
+      div(class = "sec", paste0("DIAGNÓSTICO — ", toupper(mes_lbl))),
+      shinycssloaders::withSpinner(uiOutput("ins_diagnostico"), type = 4, color = "#1a6ef7"),
+      
+      # ── Seção: clusters ───────────────────────────────────
+      div(class = "sec", "SEGMENTAÇÃO DA CARTEIRA — PERFIS DE PERFORMANCE"),
+      shinycssloaders::withSpinner(uiOutput("ins_clusters"),    type = 4, color = "#1a6ef7"),
+      
+      # ── Seção: alertas ────────────────────────────────────
+      div(class = "sec", "ALERTAS E RECOMENDAÇÕES"),
+      shinycssloaders::withSpinner(uiOutput("ins_alertas"),     type = 4, color = "#d97706"),
+      
+      # ── Seção: ranking de saúde ───────────────────────────
+      div(class = "sec", "RANKING DE SAÚDE DA CARTEIRA"),
+      shinycssloaders::withSpinner(uiOutput("ins_ranking"),     type = 4, color = "#00b388"),
+      
+      # ── Seção: benchmark imóvel ───────────────────────────
+      div(class = "sec", "BENCHMARK — IMÓVEL VS. MÉDIA DA CARTEIRA"),
+      div(class = "card",
+          div(class = "card-hdr",
+              div(class = "card-ttl", "Selecione um imóvel"),
+              span(class = "badge badge-blue", "Evolução histórica")),
+          selectInput("bench_imovel", NULL,
+                      choices  = c("Selecione..." = "",
+                                   setNames(
+                                     unlist(lapply(rv$app_data, function(d) d$imoveis_ids)),
+                                     unlist(lapply(rv$app_data, function(d) d$imoveis_ids)))),
+                      width = "280px"),
+          shinycssloaders::withSpinner(uiOutput("benchmark_imovel"), type = 4, color = "#1a6ef7")),
+      shinycssloaders::withSpinner(uiOutput("sec_benchmark_graficos"), type = 4, color = "#7c3aed")
+    )
   })
   
-  output$oportunidades <- renderUI({
-    flat <- build_carteira_flat(rv$app_data)
-    if(nrow(flat)==0) return(p(class="sem-dados","Sem dados."))
-    ultimo <- max(flat$competencia,na.rm=TRUE)
-    mes    <- dplyr::filter(flat,competencia==ultimo)
-    ocp_m  <- mean(mes$ocupacao,na.rm=TRUE)
-    dar_m  <- mean(mes$diaria_media,na.rm=TRUE)
+  # ── Helper: KPI card compacto ─────────────────────────────
+  .ins_kpi <- function(lbl, val, sub, cor = "blue") {
+    bdr <- switch(cor, green="#00b388", red="#e03e3e", orange="#d97706", purple="#7c3aed", "#1a6ef7")
+    div(style = paste0("background:#fff;border-radius:10px;padding:14px 16px;",
+                       "border:1px solid #e5e9ef;border-top:3px solid ", bdr, ";"),
+        div(style = "font-size:9px;font-weight:700;color:#9aa5b4;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;", lbl),
+        div(style = "font-size:20px;font-weight:800;color:#0f1c2e;", val),
+        div(style = paste0("font-size:11px;font-weight:500;color:", bdr, ";margin-top:4px;"), sub)
+    )
+  }
+  
+  # ── Diagnóstico analítico ─────────────────────────────────
+  output$ins_diagnostico <- renderUI({
+    a <- ins_analise(); req(a)
+    h  <- a$hist_im
+    mes_lbl <- tryCatch(fmt_mes_pt(as.Date(paste0(a$ultimo_mes,"-01"))), error=function(e) a$ultimo_mes)
+    
+    # Tendência de receita da carteira nos últimos meses
+    flat_agg <- a$flat |>
+      dplyr::group_by(mes_chr) |>
+      dplyr::summarise(rec = sum(receita_bruta, na.rm=TRUE), ocp = mean(ocupacao, na.rm=TRUE), .groups="drop") |>
+      dplyr::arrange(mes_chr)
+    trend_carteira <- .trend_slope(flat_agg$rec)
+    trend_lbl  <- if (trend_carteira > 0.05) "crescimento"
+    else if (trend_carteira < -0.05) "queda"
+    else "estabilidade"
+    
+    # Top 3 e bottom 3 por score
+    top3  <- h |> dplyr::arrange(dplyr::desc(score)) |> dplyr::slice_head(n=3)
+    bot3  <- h |> dplyr::arrange(score) |> dplyr::slice_head(n=3)
+    n_alt <- sum(h$cluster_nome == "Alta Performance", na.rm=TRUE)
+    n_ate <- sum(h$cluster_nome == "Atenção",           na.rm=TRUE)
+    n_pot <- sum(h$cluster_nome == "Potencial",         na.rm=TRUE)
+    
+    # Imóveis com queda de receita > 20% vs. média própria
+    em_queda <- h |> dplyr::filter(!is.na(anomalia_rec), anomalia_rec < -20) |>
+      dplyr::arrange(anomalia_rec)
+    em_alta  <- h |> dplyr::filter(!is.na(anomalia_rec), anomalia_rec >  25) |>
+      dplyr::arrange(dplyr::desc(anomalia_rec))
+    
+    tagList(
+      div(style="display:grid;grid-template-columns:1fr 1fr;gap:14px;",
+          # Card tendência
+          div(class="card",
+              div(class="card-hdr", div(class="card-ttl","Tendência da Carteira"),
+                  span(class=paste0("badge badge-",if(trend_carteira>0)"green"else if(trend_carteira<-0.05)"red"else"blue"),
+                       toupper(trend_lbl))),
+              div(style="padding:14px 18px;",
+                  div(style="font-size:13px;color:#374151;line-height:1.6;",
+                      paste0("Análise dos ", a$n_meses, " meses disponíveis (dez/2025 a abr/2026) indica ",
+                             trend_lbl, " na receita consolidada da carteira. ",
+                             "Dos ", nrow(h), " imóveis com histórico completo, ",
+                             n_alt, " estão em alta performance, ",
+                             n_pot, " têm potencial não explorado e ",
+                             n_ate, " requerem atenção imediata.")),
+                  div(style="margin-top:12px;display:flex;gap:16px;",
+                      lapply(seq_len(nrow(flat_agg)), function(i) {
+                        r  <- flat_agg[i,]
+                        mx <- max(flat_agg$rec, na.rm=TRUE)
+                        ht <- round(r$rec / mx * 48)
+                        bdr_c <- if (r$mes_chr == a$ultimo_mes) "#1a6ef7" else "#e2e8f0"
+                        mes_s <- tryCatch(
+                          substr(fmt_mes_pt(as.Date(paste0(r$mes_chr,"-01")), abreviado=TRUE), 1, 3),
+                          error=function(e) r$mes_chr)
+                        div(style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;",
+                            div(style=paste0("width:100%;background:",bdr_c,";border-radius:3px;height:",ht,"px;")),
+                            div(style="font-size:9px;color:#9aa5b4;font-weight:600;", mes_s),
+                            div(style="font-size:10px;font-weight:700;color:#0f1c2e;",
+                                paste0("R$", round(r$rec/1e6, 2), "M"))
+                        )
+                      })
+                  )
+              )
+          ),
+          # Card variação mês a mês
+          div(class="card",
+              div(class="card-hdr", div(class="card-ttl","Destaques do Mês"),
+                  span(class="badge badge-blue", mes_lbl)),
+              div(style="padding:14px 18px;",
+                  div(style="margin-bottom:10px;",
+                      div(style="font-size:9px;font-weight:700;color:#9aa5b4;letter-spacing:.7px;text-transform:uppercase;margin-bottom:6px;","MAIOR CRESCIMENTO VS. MÉDIA PRÓPRIA"),
+                      if (nrow(em_alta) > 0) {
+                        lapply(seq_len(min(2, nrow(em_alta))), function(i) {
+                          r <- em_alta[i,]
+                          div(style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f8fafc;font-size:12px;",
+                              div(style="color:#0f1c2e;font-weight:600;", r$imovel),
+                              div(style="color:#00b388;font-weight:700;",
+                                  paste0("+", round(r$anomalia_rec, 0), "% vs. média"))
+                          )
+                        })
+                      } else { div(style="font-size:12px;color:#9aa5b4;","Sem variações expressivas.") }
+                  ),
+                  div(
+                    div(style="font-size:9px;font-weight:700;color:#9aa5b4;letter-spacing:.7px;text-transform:uppercase;margin-bottom:6px;","MAIOR QUEDA VS. MÉDIA PRÓPRIA"),
+                    if (nrow(em_queda) > 0) {
+                      lapply(seq_len(min(2, nrow(em_queda))), function(i) {
+                        r <- em_queda[i,]
+                        div(style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f8fafc;font-size:12px;",
+                            div(style="color:#0f1c2e;font-weight:600;", r$imovel),
+                            div(style="color:#e03e3e;font-weight:700;",
+                                paste0(round(r$anomalia_rec, 0), "% vs. média"))
+                        )
+                      })
+                    } else { div(style="font-size:12px;color:#9aa5b4;","Todos dentro da normalidade histórica.") }
+                  )
+              )
+          )
+      )
+    )
+  })
+  
+  # ── Clusters de performance ───────────────────────────────
+  output$ins_clusters <- renderUI({
+    a <- ins_analise(); req(a)
+    h <- a$hist_im
+    
+    cluster_info <- list(
+      "Alta Performance" = list(
+        cor  = "#00b388",
+        desc = "Ocupação e diária acima da média da carteira. Imóveis âncora — priorizar retenção dos proprietários.",
+        acao = "Apresentar como benchmark para novos proprietários."
+      ),
+      "Potencial" = list(
+        cor  = "#1a6ef7",
+        desc = "Diária competitiva mas ocupação abaixo do esperado, ou vice-versa. Ajuste de estratégia pode gerar ganho relevante.",
+        acao = "Revisar precificação e distribuição por canal."
+      ),
+      "Atenção" = list(
+        cor  = "#d97706",
+        desc = "Ocupação e diária abaixo da média da carteira. Risco de insatisfação do proprietário sem ação corretiva.",
+        acao = "Contato proativo com proprietário e revisão de contrato."
+      )
+    )
+    
+    div(style = "display:grid;grid-template-columns:repeat(3,1fr);gap:12px;",
+        lapply(names(cluster_info), function(nm) {
+          info <- cluster_info[[nm]]
+          ims  <- h |> dplyr::filter(cluster_nome == nm) |>
+            dplyr::arrange(dplyr::desc(score))
+          n    <- nrow(ims)
+          ocp  <- if (n > 0) round(mean(ims$ocp_media, na.rm=TRUE), 1) else 0
+          dar  <- if (n > 0) round(mean(ims$dar_media, na.rm=TRUE), 2) else 0
+          rec  <- if (n > 0) sum(ims$rec_total, na.rm=TRUE) else 0
+          
+          div(class="card",
+              div(style=paste0("padding:14px 18px;border-top:3px solid ",info$cor,";"),
+                  div(style=paste0("display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"),
+                      div(style=paste0("font-size:13px;font-weight:700;color:",info$cor,";"), nm),
+                      div(style=paste0("font-size:22px;font-weight:800;color:#0f1c2e;"), n,
+                          div(style="font-size:9px;font-weight:600;color:#9aa5b4;letter-spacing:.6px;text-transform:uppercase;","imóveis"))
+                  ),
+                  div(style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;",
+                      div(style="background:#f8fafc;border-radius:6px;padding:8px;",
+                          div(style="font-size:9px;color:#9aa5b4;font-weight:700;letter-spacing:.5px;text-transform:uppercase;","Ocup. Média"),
+                          div(style="font-size:16px;font-weight:800;color:#0f1c2e;", paste0(ocp, "%"))),
+                      div(style="background:#f8fafc;border-radius:6px;padding:8px;",
+                          div(style="font-size:9px;color:#9aa5b4;font-weight:700;letter-spacing:.5px;text-transform:uppercase;","Diária Média"),
+                          div(style="font-size:16px;font-weight:800;color:#0f1c2e;", brl(dar)))
+                  ),
+                  div(style="font-size:11px;color:#6b7280;line-height:1.5;margin-bottom:10px;", info$desc),
+                  div(style=paste0("font-size:11px;font-weight:600;color:",info$cor,";padding:8px 10px;",
+                                   "background:",info$cor,"18;border-radius:6px;"), info$acao),
+                  if (n > 0) {
+                    top_ims <- head(ims$imovel, 4)
+                    div(style="margin-top:10px;",
+                        div(style="font-size:9px;color:#9aa5b4;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;","Destaques"),
+                        lapply(top_ims, function(im) {
+                          sc <- ims$score[ims$imovel == im][1]
+                          div(style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #fafbfc;",
+                              div(style="color:#374151;", im),
+                              div(style=paste0("font-weight:700;color:",info$cor,";"), paste0(sc, " pts")))
+                        })
+                    )
+                  }
+              )
+          )
+        })
+    )
+  })
+  
+  # ── Alertas e recomendações ───────────────────────────────
+  output$ins_alertas <- renderUI({
+    a <- ins_analise(); req(a)
+    h <- a$hist_im
+    
     alertas <- list()
-    abaixo <- mes|>dplyr::filter(ocupacao<ocp_m*.8)|>dplyr::arrange(ocupacao)
-    if(nrow(abaixo)>0) for(i in seq_len(min(nrow(abaixo),3))){
-      r <- abaixo[i,]
-      alertas <- c(alertas,list(div(class="alert-row alert-warn",div(class="alert-icon","⚠️"),
-                                    div(tags$b(r$imovel)," — Ocupação abaixo da média: ",tags$b(paste0(round(r$ocupacao),"%")),
-                                        " vs. média ",tags$b(paste0(round(ocp_m),"%")),". Sugestão: revisar preço ou ampliar canais."))))
+    
+    # 1. Anomalias de queda vs. histórico próprio
+    em_queda <- h |>
+      dplyr::filter(!is.na(anomalia_rec), anomalia_rec < -20) |>
+      dplyr::arrange(anomalia_rec) |>
+      dplyr::slice_head(n = 5)
+    for (i in seq_len(nrow(em_queda))) {
+      r <- em_queda[i,]
+      alertas <- c(alertas, list(
+        .ins_alerta("critico",
+                    paste0(r$imovel, " — Receita ", round(r$anomalia_rec,0), "% abaixo da sua própria média histórica"),
+                    paste0("Proprietário: ", r$proprietario, ". Média histórica: ", brl(r$rec_media),
+                           " | Mês atual: ", brl(r$rec_atual %||% 0),
+                           ". Verificar disponibilidade no calendário e ação nos canais de distribuição."))
+      ))
     }
-    precif <- mes|>dplyr::filter(diaria_media>dar_m*1.3,ocupacao<ocp_m*.7)
-    if(nrow(precif)>0) for(i in seq_len(min(nrow(precif),2))){
+    
+    # 2. Precificação fora do mercado (diária alta, ocupação baixa vs. média própria)
+    precif <- h |>
+      dplyr::filter(!is.na(ocp_atual), !is.na(dar_atual),
+                    dar_atual  > a$dar_med * 1.25,
+                    ocp_atual  < a$ocp_med * 0.70) |>
+      dplyr::arrange(ocp_atual)
+    for (i in seq_len(min(3, nrow(precif)))) {
       r <- precif[i,]
-      alertas <- c(alertas,list(div(class="alert-row alert-warn",div(class="alert-icon","💡"),
-                                    div(tags$b(r$imovel)," — Diária alta (",s_brl(r$diaria_media),") mas ocupação baixa (",
-                                        round(r$ocupacao),"%). Possível precificação fora do mercado."))))
+      alertas <- c(alertas, list(
+        .ins_alerta("atencao",
+                    paste0(r$imovel, " — Diária ", round((r$dar_atual/a$dar_med-1)*100,0),
+                           "% acima da média, ocupação ", round(r$ocp_atual,0), "%"),
+                    paste0("Possível precificação acima do mercado para o período. ",
+                           "Diária atual: ", brl(r$dar_atual), " vs. média da carteira: ", brl(a$dar_med),
+                           ". Testar redução de 10–15% para elevar ocupação."))
+      ))
     }
-    tops <- mes|>dplyr::filter(ocupacao>ocp_m*1.2,diaria_media>dar_m)|>dplyr::arrange(dplyr::desc(receita_bruta))
-    if(nrow(tops)>0) for(i in seq_len(min(nrow(tops),2))){
+    
+    # 3. Imóveis em queda de tendência consistente
+    queda_trend <- h |>
+      dplyr::filter(trend_rec < -0.15, n_meses >= 3) |>
+      dplyr::arrange(trend_rec) |>
+      dplyr::slice_head(n = 3)
+    for (i in seq_len(nrow(queda_trend))) {
+      r <- queda_trend[i,]
+      alertas <- c(alertas, list(
+        .ins_alerta("atencao",
+                    paste0(r$imovel, " — Tendência de queda consistente nos últimos ", r$n_meses, " meses"),
+                    paste0("Receita média: ", brl(r$rec_media), ". ",
+                           "Recomendado: revisão de contrato, verificação de avaliações e ajuste de estratégia de canais."))
+      ))
+    }
+    
+    # 4. Oportunidades (alta tendência + abaixo da média de diária)
+    oportunidade <- h |>
+      dplyr::filter(trend_rec > 0.10, dar_media < a$dar_med * 0.85) |>
+      dplyr::arrange(dplyr::desc(trend_rec)) |>
+      dplyr::slice_head(n = 3)
+    for (i in seq_len(nrow(oportunidade))) {
+      r <- oportunidade[i,]
+      alertas <- c(alertas, list(
+        .ins_alerta("positivo",
+                    paste0(r$imovel, " — Crescimento consistente com diária abaixo do potencial"),
+                    paste0("Tendência positiva de receita com diária ", brl(r$dar_media),
+                           " vs. média da carteira ", brl(a$dar_med),
+                           ". Potencial de aumento de ", brl(a$dar_med - r$dar_media),
+                           "/noite sem impactar ocupação atual de ", round(r$ocp_media,0), "%."))
+      ))
+    }
+    
+    # 5. Top performers consolidados
+    tops <- h |>
+      dplyr::filter(cluster_nome == "Alta Performance") |>
+      dplyr::arrange(dplyr::desc(rec_total)) |>
+      dplyr::slice_head(n = 2)
+    for (i in seq_len(nrow(tops))) {
       r <- tops[i,]
-      alertas <- c(alertas,list(div(class="alert-row alert-ok",div(class="alert-icon","🌟"),
-                                    div(tags$b(r$imovel)," — Performance excelente: ",round(r$ocupacao),"% ocupação + diária ",
-                                        s_brl(r$diaria_media),". Bom caso para apresentar a novos proprietários."))))
+      alertas <- c(alertas, list(
+        .ins_alerta("positivo",
+                    paste0(r$imovel, " — Melhor performance acumulada da carteira"),
+                    paste0("Receita acumulada: ", brl(r$rec_total), " em ", r$n_meses, " meses. ",
+                           "Ocupação média: ", round(r$ocp_media,1), "%. ",
+                           "Imóvel referência para benchmark com novos proprietários."))
+      ))
     }
-    if(length(alertas)==0)
-      alertas <- list(div(class="alert-row alert-ok",div(class="alert-icon","✅"),
-                          div("Nenhuma oportunidade crítica identificada. Carteira com bom desempenho geral.")))
-    div(!!!alertas)
+    
+    if (length(alertas) == 0)
+      alertas <- list(.ins_alerta("positivo","Carteira sem alertas críticos",
+                                  "Todos os imóveis dentro dos parâmetros esperados para o período."))
+    
+    div(style="display:flex;flex-direction:column;gap:8px;", !!!alertas)
   })
   
-  output$pv_metric_receita <- renderUI({
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) return(NULL)
-    div(class="pv-metric",paste0("📈 Total gerenciado: ",s_brl_compact(sum(flat$receita_bruta,na.rm=TRUE))))
-  })
-  output$pv_metric_manutencao <- renderUI({
-    flat <- build_carteira_flat(rv$app_data)
-    div(class="pv-metric",paste0("🔧 ",length(unique(flat$imovel))," imóveis monitorados"))
-  })
-  output$pv_metric_bench <- renderUI({
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) return(NULL)
-    div(class="pv-metric",paste0("🏆 Ocupação média: ",round(mean(flat$ocupacao,na.rm=TRUE),1),"%"))
-  })
-  output$pv_metric_custos <- renderUI({
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) return(NULL)
-    rec <- sum(flat$receita_bruta,na.rm=TRUE); cus <- sum(flat$outros_custos,na.rm=TRUE)
-    div(class="pv-metric",paste0("💰 Custo/Receita: ",if(rec>0) round(cus/rec*100,1) else 0,"%"))
-  })
-  output$pv_metric_resultado <- renderUI({
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) return(NULL)
-    rec <- sum(flat$receita_bruta,na.rm=TRUE); res <- sum(flat$resultado_liq,na.rm=TRUE)
-    div(class="pv-metric",paste0("🌟 Margem líquida: ",if(rec>0) round(res/rec*100,1) else 0,"%"))
+  # ── Helper: card de alerta ────────────────────────────────
+  .ins_alerta <- function(tipo, titulo, descricao) {
+    cfg <- switch(tipo,
+                  critico  = list(bdr="#e03e3e", bg="#fef2f2", lbl_bg="#fee2e2", lbl_cor="#991b1b", lbl="CRÍTICO"),
+                  atencao  = list(bdr="#d97706", bg="#fffbeb", lbl_bg="#fef3c7", lbl_cor="#854d0e", lbl="ATENÇÃO"),
+                  positivo = list(bdr="#00b388", bg="#f0fdf9", lbl_bg="#d1fae5", lbl_cor="#065f46", lbl="OPORTUNIDADE"),
+                  list(bdr="#1a6ef7", bg="#eff6ff", lbl_bg="#dbeafe", lbl_cor="#1e40af", lbl="INFO")
+    )
+    div(style=paste0("background:",cfg$bg,";border:1px solid ",cfg$bdr,"33;border-left:3px solid ",
+                     cfg$bdr,";border-radius:8px;padding:12px 16px;display:flex;gap:14px;align-items:flex-start;"),
+        div(style=paste0("flex-shrink:0;padding:3px 8px;border-radius:4px;font-size:9px;font-weight:800;",
+                         "letter-spacing:.8px;background:",cfg$lbl_bg,";color:",cfg$lbl_cor,";",
+                         "margin-top:1px;white-space:nowrap;"), cfg$lbl),
+        div(style="flex:1;",
+            div(style="font-size:12px;font-weight:700;color:#0f1c2e;margin-bottom:3px;", titulo),
+            div(style="font-size:11px;color:#6b7280;line-height:1.5;", descricao)
+        )
+    )
+  }
+  
+  # ── Ranking de saúde ─────────────────────────────────────
+  output$ins_ranking <- renderUI({
+    a <- ins_analise(); req(a)
+    h <- a$hist_im |> dplyr::arrange(dplyr::desc(score))
+    n <- min(20, nrow(h))
+    if (n == 0) return(p(class="sem-dados","Sem dados suficientes para ranking."))
+    
+    max_s <- max(h$score, na.rm=TRUE)
+    
+    div(class="card",
+        div(class="card-hdr",
+            div(class="card-ttl", paste0("Top ", n, " imóveis por score de saúde")),
+            span(class="badge badge-blue",
+                 paste0(nrow(h), " imóveis analisados"))),
+        div(style="padding:6px 18px 14px;",
+            # Cabeçalho da tabela
+            div(style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 80px 70px;",
+                style="gap:6px;padding:6px 0;border-bottom:2px solid #f0f4f8;margin-bottom:4px;",
+                lapply(c("Imóvel","Ocupação","Diária Média","Receita Acum.","Tendência","Score"), function(lbl)
+                  div(style="font-size:9px;font-weight:800;color:#9aa5b4;letter-spacing:.6px;text-transform:uppercase;",lbl)
+                )
+            ),
+            lapply(seq_len(n), function(i) {
+              r   <- h[i,]
+              sc  <- r$score
+              bdr <- if (r$cluster_nome=="Alta Performance") "#00b388"
+              else if (r$cluster_nome=="Potencial") "#1a6ef7" else "#d97706"
+              trend_lbl <- if (r$trend_rec > 0.05) "Crescimento"
+              else if (r$trend_rec < -0.05) "Queda"
+              else "Estável"
+              trend_cor <- if (r$trend_rec > 0.05) "#00b388"
+              else if (r$trend_rec < -0.05) "#e03e3e" else "#9aa5b4"
+              pct <- round(sc / max(max_s, 1) * 100)
+              div(style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 80px 70px;gap:6px;",
+                  style=paste0("padding:8px 0;border-bottom:1px solid #fafbfc;",
+                               if(i%%2==0) "background:#fafbfc;" else ""),
+                  div(style="display:flex;flex-direction:column;justify-content:center;",
+                      div(style="font-size:12px;font-weight:600;color:#0f1c2e;", r$imovel),
+                      div(style=paste0("font-size:10px;font-weight:600;color:",bdr,";"), r$cluster_nome)),
+                  div(style="font-size:12px;color:#374151;display:flex;align-items:center;",
+                      paste0(round(r$ocp_media,0), "%")),
+                  div(style="font-size:12px;color:#374151;display:flex;align-items:center;",
+                      brl(r$dar_media)),
+                  div(style="font-size:12px;color:#374151;display:flex;align-items:center;",
+                      brl(r$rec_total)),
+                  div(style=paste0("font-size:11px;font-weight:600;color:",trend_cor,";display:flex;align-items:center;"),
+                      trend_lbl),
+                  div(style="display:flex;align-items:center;gap:6px;",
+                      div(style=paste0("flex:1;height:6px;border-radius:3px;background:#f0f4f8;overflow:hidden;"),
+                          div(style=paste0("width:",pct,"%;height:100%;background:",bdr,";border-radius:3px;"))),
+                      div(style=paste0("font-size:11px;font-weight:800;color:",bdr,";min-width:28px;"), sc)
+                  )
+              )
+            })
+        )
+    )
   })
   
   output$benchmark_imovel <- renderUI({
-    req(input$bench_imovel,nzchar(input$bench_imovel))
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) return(NULL)
-    ultimo <- max(flat$competencia,na.rm=TRUE)
-    mes_df <- dplyr::filter(flat,competencia==ultimo)
-    im_df  <- dplyr::filter(mes_df,imovel==input$bench_imovel)
-    if(nrow(im_df)==0) return(p(class="sem-dados","Imóvel sem dados no período mais recente."))
-    im  <- im_df[1,]
-    med <- dplyr::summarise(mes_df,
-                            rec=mean(receita_bruta,na.rm=TRUE),res=mean(resultado_liq,na.rm=TRUE),
-                            ocp=mean(ocupacao,na.rm=TRUE),dar=mean(diaria_media,na.rm=TRUE))
-    mk <- function(val,mval){
-      diff <- val-mval; pct_d <- if(mval>0) diff/mval*100 else 0
-      list(sinal=if(diff>=0)"▲ +" else "▼ ",pct=abs(round(pct_d,1)),cls=if(diff>=0)"fv g" else "fv r")
-    }
-    metricas <- list(
-      list(lbl="Receita Bruta",  val=s_brl(im$receita_bruta),med=s_brl(med$rec), cp=mk(im$receita_bruta,med$rec)),
-      list(lbl="Resultado Líq.", val=s_brl(im$resultado_liq),med=s_brl(med$res), cp=mk(im$resultado_liq,med$res)),
-      list(lbl="Ocupação",       val=s_pct(im$ocupacao),      med=s_pct(med$ocp), cp=mk(im$ocupacao,med$ocp)),
-      list(lbl="Diária Média",   val=s_brl(im$diaria_media),  med=s_brl(med$dar), cp=mk(im$diaria_media,med$dar)))
-    div(style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px;",
-        lapply(metricas,function(mt){
-          div(class="kcard",
-              div(class="klbl",mt$lbl),
-              div(class="kval",mt$val),
-              div(style="font-size:11px;color:#6b7280;margin-top:4px;",paste0("Média: ",mt$med)),
-              div(class=mt$cp$cls,style="font-size:11px;margin-top:2px;font-weight:700;",
-                  paste0(mt$cp$sinal,mt$cp$pct,"% vs. média")))
-        }))
+    req(input$bench_imovel, nzchar(input$bench_imovel))
+    flat <- build_carteira_flat(rv$app_data); if (nrow(flat) == 0) return(NULL)
+    im_df <- flat |> dplyr::filter(imovel == input$bench_imovel) |> dplyr::arrange(mes)
+    med_df <- flat |> dplyr::group_by(mes, mes_label) |>
+      dplyr::summarise(ocp_med = mean(ocupacao, na.rm=TRUE),
+                       rec_med = mean(receita_bruta, na.rm=TRUE), .groups="drop") |>
+      dplyr::arrange(mes)
+    if (nrow(im_df) == 0) return(div(class="sem-dados","Imóvel sem histórico disponível."))
+    score_im <- round(.health_score(
+      mean(im_df$ocupacao, na.rm=TRUE), mean(im_df$diaria_media, na.rm=TRUE),
+      mean(med_df$ocp_med, na.rm=TRUE), mean(flat$diaria_media, na.rm=TRUE), 0))
+    div(style="padding:14px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;",
+        .ins_kpi("Receita Acumulada",  brl(sum(im_df$receita_bruta, na.rm=TRUE)), paste0(nrow(im_df)," meses"), "blue"),
+        .ins_kpi("Ocupação Média",     paste0(round(mean(im_df$ocupacao,na.rm=TRUE),1),"%"),
+                 paste0("Carteira: ", round(mean(med_df$ocp_med,na.rm=TRUE),1),"%"),
+                 if(mean(im_df$ocupacao,na.rm=TRUE) >= mean(med_df$ocp_med,na.rm=TRUE))"green" else "orange"),
+        .ins_kpi("Diária Média",       brl(mean(im_df$diaria_media,na.rm=TRUE)),
+                 paste0("Carteira: ", brl(mean(flat$diaria_media,na.rm=TRUE))), "blue"),
+        .ins_kpi("Score de Saúde",     paste0(score_im," / 100"),
+                 if(score_im>=70)"Boa performance" else if(score_im>=45)"Performance média" else "Requer atenção",
+                 if(score_im>=70)"green" else if(score_im>=45)"blue" else "orange")
+    )
   })
   
   output$sec_benchmark_graficos <- renderUI({
-    req(input$bench_imovel,nzchar(input$bench_imovel))
+    req(input$bench_imovel, nzchar(input$bench_imovel))
     div(class="cgrid",
         div(class="card",
-            div(class="card-hdr",div(class="card-ttl","Receita: Imóvel vs. Média"),span(class="badge badge-blue","Evolução")),
-            shinycssloaders::withSpinner(plotlyOutput("g_bench_receita",height="220px"),type=4,color="#1a6ef7")),
+            div(class="card-hdr", div(class="card-ttl","Receita — Imóvel vs. Média"),
+                span(class="badge badge-blue","Evolução")),
+            shinycssloaders::withSpinner(plotlyOutput("g_bench_receita",  height="220px"), type=4, color="#1a6ef7")),
         div(class="card",
-            div(class="card-hdr",div(class="card-ttl","Ocupação: Imóvel vs. Média"),span(class="badge badge-green","Evolução")),
-            shinycssloaders::withSpinner(plotlyOutput("g_bench_ocupacao",height="220px"),type=4,color="#00b388")))
+            div(class="card-hdr", div(class="card-ttl","Ocupação — Imóvel vs. Média"),
+                span(class="badge badge-green","Evolução")),
+            shinycssloaders::withSpinner(plotlyOutput("g_bench_ocupacao", height="220px"), type=4, color="#00b388")))
   })
   
   output$g_bench_receita <- renderPlotly({
-    req(input$bench_imovel,nzchar(input$bench_imovel))
+    req(input$bench_imovel, nzchar(input$bench_imovel))
     flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) validate(need(FALSE,""))
     im_df  <- flat|>dplyr::filter(imovel==input$bench_imovel)|>dplyr::arrange(mes)
     med_df <- flat|>dplyr::group_by(mes,mes_label)|>
@@ -2032,7 +2544,7 @@ server <- function(input, output, session) {
   })
   
   output$g_bench_ocupacao <- renderPlotly({
-    req(input$bench_imovel,nzchar(input$bench_imovel))
+    req(input$bench_imovel, nzchar(input$bench_imovel))
     flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) validate(need(FALSE,""))
     im_df  <- flat|>dplyr::filter(imovel==input$bench_imovel)|>dplyr::arrange(mes)
     med_df <- flat|>dplyr::group_by(mes,mes_label)|>
@@ -2051,6 +2563,490 @@ server <- function(input, output, session) {
              margin=list(l=45,r=12,t=8,b=30),
              legend=list(x=0,y=1.15,orientation="h",font=list(size=10)))|>config(displayModeBar=FALSE)
   })
+  
+  
+  # ═══════════════════════════════════════════════════════════
+  # ABA 3 — REVISÃO GERENCIAL
+  # Fluxo: editar → salvar rascunho → publicar → write-back Drive
+  # ═══════════════════════════════════════════════════════════
+  
+  # ── Helpers ────────────────────────────────────────────────
+  .ger_key    <- function(mes, apto) paste0(as.character(mes), "|", apto)
+  .ger_get    <- function(key, field, default) { e <- rv$ger_edits[[key]]; if (!is.null(e) && !is.null(e[[field]])) e[[field]] else default }
+  .ger_is_pub <- function(key) isTRUE(!is.null(rv$ger_pub[[key]]))
+  .ger_status <- function(key) { if (.ger_is_pub(key)) "pub" else if (!is.null(rv$ger_edits[[key]]) && length(rv$ger_edits[[key]]) > 0) "rev" else "pen" }
+  
+  # ── Persistência gerencial no SQLite local ─────────────────
+  # Grava na tabela ger_ajustes do bsbstay.sqlite (/data/bsbstay).
+  # Não toca na fonte base (Google Drive). Persiste entre sessões.
+  .ger_save_sqlite <- function(mes, apto, cpf, edits, publicado = FALSE) {
+    tryCatch({
+      ger_save_ajuste(
+        mes             = mes,
+        apto            = apto,
+        cpf_cnpj        = cpf,
+        taxa_adm        = round(as.numeric(edits$taxa_adm        %||% 0),    2),
+        manutencao      = round(as.numeric(edits$manutencao      %||% 0),    2),
+        reposicao       = round(as.numeric(edits$reposicao       %||% 0),    2),
+        despesas        = round(as.numeric(edits$despesas        %||% 0),    2),
+        # receita_ajuste: NULL = sem ajuste; valor = sobrescreve original
+        receita_ajuste  = if (is.null(edits$receita_ajuste) || is.na(edits$receita_ajuste))
+          NULL
+        else round(as.numeric(edits$receita_ajuste), 2),
+        rec_original    = if (is.null(edits$rec_original) || is.na(edits$rec_original))
+          NULL
+        else round(as.numeric(edits$rec_original), 2),
+        nota            = as.character(edits$nota %||% ""),
+        publicado       = publicado
+      )
+      TRUE
+    }, error = function(e) {
+      message("[Ger] Falha ao gravar SQLite: ", e$message)
+      FALSE
+    })
+  }
+  
+  # ── Reactive: dados do mês ─────────────────────────────────
+  # Carrega estado salvo do SQLite quando entra na aba gerencial
+  observeEvent(rv$aba, {
+    if (rv$aba != "gerencial") return()
+    tryCatch({
+      aj <- ger_load_ajustes()
+      if (is.null(aj) || nrow(aj) == 0) return()
+      # Repopula rv$ger_edits e rv$ger_pub com o que estava salvo
+      for (i in seq_len(nrow(aj))) {
+        key <- paste0(substr(as.character(aj$mes[i]),1,7), "|", aj$apto[i])
+        rv$ger_edits[[key]] <- list(
+          taxa_adm       = aj$taxa_adm[i],
+          manutencao     = aj$manutencao[i],
+          reposicao      = aj$reposicao[i],
+          despesas       = aj$despesas[i],
+          receita_ajuste = if ("receita_ajuste" %in% names(aj) && !is.na(aj$receita_ajuste[i]))
+            aj$receita_ajuste[i] else NULL,
+          rec_original   = if ("rec_original" %in% names(aj) && !is.na(aj$rec_original[i]))
+            aj$rec_original[i] else NULL,
+          nota           = aj$nota[i]
+        )
+        if (isTRUE(aj$publicado[i] == 1L)) {
+          rv$ger_pub[[key]] <- if (nzchar(aj$ts[i])) aj$ts[i] else "Publicado"
+        }
+      }
+      message(sprintf("[Ger] %d ajuste(s) carregado(s) do SQLite.", nrow(aj)))
+    }, error = function(e) message("[Ger] AVISO ao carregar ajustes: ", e$message))
+  }, ignoreInit = FALSE)
+  
+  ger_dados <- reactive({
+    req(rv$aba == "gerencial")
+    d <- rv$app_data; if (length(d) == 0) return(NULL)
+    mes_sel <- input$ger_mes; req(!is.null(mes_sel), nzchar(mes_sel))
+    flat <- build_carteira_flat(d); if (nrow(flat) == 0) return(NULL)
+    mes_chr <- substr(as.character(mes_sel), 1, 7)
+    flat |>
+      dplyr::filter(substr(as.character(competencia), 1, 7) == mes_chr) |>
+      dplyr::mutate(
+        receita_bruta    = dplyr::coalesce(as.numeric(receita_bruta), 0),
+        taxa_adm         = dplyr::coalesce(as.numeric(taxa_adm), 0),
+        manutencao_total = dplyr::coalesce(as.numeric(manutencao_total), 0),
+        reposicao_total  = dplyr::coalesce(as.numeric(reposicao_total), 0),
+        despesas_total   = dplyr::coalesce(as.numeric(despesas_total), 0),
+        outros_custos    = dplyr::coalesce(as.numeric(outros_custos), 0),
+        resultado_liq    = dplyr::coalesce(as.numeric(resultado_liq), 0)
+      ) |>
+      dplyr::arrange(proprietario, imovel)
+  })
+  
+  # ── UI: body gerencial ──────────────────────────────────────
+  output$body_gerencial <- renderUI({
+    d <- rv$app_data
+    if (length(d) == 0) return(div(class="empty-state", h3("Carregando..."), p("Aguarde a sincronização.")))
+    flat <- build_carteira_flat(d)
+    if (nrow(flat) == 0) return(div(class="empty-state", h3("Sem dados.")))
+    meses_disp <- sort(unique(substr(as.character(flat$competencia), 1, 7)), decreasing = TRUE)
+    meses_lbl  <- setNames(meses_disp, {
+      dt <- suppressWarnings(as.Date(paste0(meses_disp, "-01")))
+      ifelse(is.na(dt), meses_disp, fmt_mes_pt(dt))
+    })
+    tagList(
+      div(class = "ger-filter-bar",
+          div(class = "ger-filter-lbl", "MÊS"),
+          selectInput("ger_mes", NULL, choices = meses_lbl, selected = meses_disp[1], width = "170px"),
+          div(class = "ger-filter-lbl", "BUSCAR"),
+          # Campo de busca sem oninput — usa debounce via JS puro, NÃO dispara renderUI
+          tags$input(type = "text", id = "ger_search_input", class = "ger-search",
+                     placeholder = "Imóvel ou proprietário..."),
+          tags$button("Publicar revisados", id = "ger_pub_todos_btn",
+                      class = "ger-btn-pub-all",
+                      onclick = "Shiny.setInputValue('ger_pub_todos', Math.random(), {priority:'event'})")
+      ),
+      uiOutput("ger_kpis"),
+      uiOutput("ger_cards")
+    )
+  })
+  
+  # ── KPIs ───────────────────────────────────────────────────
+  output$ger_kpis <- renderUI({
+    df <- ger_dados(); req(df, nrow(df) > 0)
+    n  <- nrow(df)
+    n_pub <- sum(sapply(seq_len(n), function(i) .ger_is_pub(.ger_key(df$competencia[i], df$imovel[i]))))
+    n_rev <- sum(sapply(seq_len(n), function(i) .ger_status(.ger_key(df$competencia[i], df$imovel[i])) == "rev"))
+    div(class = "ger-header",
+        div(div(class = "ger-header-title", "Revisão Gerencial"),
+            div(class = "ger-header-sub",
+                paste0(n, " apartamentos · ",
+                       fmt_mes_pt(suppressWarnings(as.Date(paste0(df$competencia[1], "-01"))))))),
+        div(class = "ger-stats",
+            div(class="ger-stat", div(class="ger-stat-val",style="color:#f59e0b;",n-n_pub-n_rev), div(class="ger-stat-lbl","Pendentes")),
+            div(class="ger-stat", div(class="ger-stat-val",style="color:#60a5fa;",n_rev),          div(class="ger-stat-lbl","Em Revisão")),
+            div(class="ger-stat", div(class="ger-stat-val",n_pub),                                  div(class="ger-stat-lbl","Publicados")),
+            div(class="ger-stat", div(class="ger-stat-val",brl(sum(df$receita_bruta))),              div(class="ger-stat-lbl","Receita Total")),
+            div(class="ger-stat", div(class="ger-stat-val",
+                                      style=if(sum(df$resultado_liq)>=0)"color:#34d99e;" else "color:#f87171;",
+                                      brl(sum(df$resultado_liq))),                                                          div(class="ger-stat-lbl","Resultado Líq."))
+        )
+    )
+  })
+  
+  # ── Cards: renderUI só re-renderiza quando mes muda (não na busca) ─
+  # A busca é feita inteiramente via JS — sem re-render do Shiny.
+  output$ger_cards <- renderUI({
+    df <- ger_dados(); req(df, nrow(df) > 0)
+    # Snapshot do estado de edições para evitar re-render desnecessário
+    edits_snap <- rv$ger_edits
+    pub_snap   <- rv$ger_pub
+    
+    fmt_diff <- function(orig, edit) {
+      d <- round(edit - orig, 2)
+      if (abs(d) < 0.01) return(div(class="ger-field-diff neu", "—"))
+      div(class=paste("ger-field-diff", if(d<0)"pos" else "neg"),
+          if(d>0) paste0("+",brl(d)) else brl(d))
+    }
+    
+    cards <- lapply(seq_len(nrow(df)), function(i) {
+      row  <- df[i,]
+      mes  <- substr(as.character(row$competencia), 1, 7)
+      apto <- row$imovel
+      prop <- row$proprietario %||% ""
+      key  <- .ger_key(mes, apto)
+      st   <- .ger_status(key)
+      pub  <- .ger_is_pub(key)
+      
+      taxa_ed <- .ger_get(key, "taxa_adm",       row$taxa_adm)
+      man_ed  <- .ger_get(key, "manutencao",     row$manutencao_total)
+      rep_ed  <- .ger_get(key, "reposicao",      row$reposicao_total)
+      des_ed  <- .ger_get(key, "despesas",       row$despesas_total)
+      nota_ed <- .ger_get(key, "nota",           "")
+      # Receita ajustada: NULL = usa original
+      rec_aj  <- .ger_get(key, "receita_ajuste", NULL)
+      rec_ed  <- if (!is.null(rec_aj) && !is.na(rec_aj)) as.numeric(rec_aj)
+      else as.numeric(row$receita_bruta)
+      res_ed  <- rec_ed - taxa_ed - (man_ed + rep_ed + des_ed)
+      
+      ks       <- gsub("[^a-zA-Z0-9]","_",key)
+      body_id  <- paste0("gbody_", ks)
+      pill_lbl <- switch(st, pub="Publicado", rev="Em Revisão", "Pendente")
+      pill_cls <- switch(st, pub="pill-pub",  rev="pill-rev",   "pill-pen")
+      card_cls <- paste("ger-apto-card", st)
+      # data-search para filtro JS
+      search_str <- tolower(paste(apto, prop))
+      
+      div(class = card_cls,
+          `data-search` = search_str,
+          
+          # ── Cabeçalho ─────────────────────────────────
+          tags$div(
+            class   = "ger-apto-hdr",
+            onclick = sprintf("gerToggle('%s')", body_id),
+            div(style="flex:1;min-width:0;",
+                div(class="ger-apto-nome", apto),
+                div(class="ger-apto-prop", prop)),
+            div(style="display:flex;gap:20px;align-items:center;flex-shrink:0;",
+                div(div(class="ger-col-lbl","Receita"),   div(class="ger-apto-rec", brl(row$receita_bruta))),
+                div(div(class="ger-col-lbl","Resultado"),
+                    div(class=paste("ger-apto-res",if(res_ed>=0)"pos"else"neg"), brl(res_ed))),
+                div(div(class="ger-col-lbl","Status"),
+                    div(class=paste("ger-status-pill",pill_cls), pill_lbl)),
+                div(id=paste0("chev_",ks), class="ger-chevron", "▼")
+            )
+          ),
+          
+          # ── Corpo (colapsado) ──────────────────────────
+          div(id=body_id, style="display:none;",
+              div(class="ger-body",
+                  
+                  # Resumo numérico
+                  div(class="ger-sumario",
+                      div(class="ger-sum-item", div(class="ger-sum-lbl","Receita"),
+                          div(class="ger-sum-val", brl(rec_ed),
+                              if (!is.null(rec_aj) && !is.na(rec_aj))
+                                div(style="font-size:9px;color:#9aa5b4;margin-top:1px;",
+                                    paste0("original: ", brl(row$receita_bruta)))
+                          )),
+                      div(class="ger-sum-item", div(class="ger-sum-lbl","Taxa Adm"),     div(class="ger-sum-val r",  brl(taxa_ed))),
+                      div(class="ger-sum-item", div(class="ger-sum-lbl","Manutenção"),   div(class="ger-sum-val r",  brl(man_ed))),
+                      div(class="ger-sum-item", div(class="ger-sum-lbl","Reposição"),    div(class="ger-sum-val r",  brl(rep_ed))),
+                      div(class="ger-sum-item", div(class="ger-sum-lbl","Despesas"),     div(class="ger-sum-val r",  brl(des_ed))),
+                      div(class="ger-sum-item", div(class="ger-sum-lbl","Resultado"),
+                          div(class=if(res_ed>=0)"ger-sum-val g"else"ger-sum-val r", brl(res_ed)))
+                  ),
+                  
+                  # Campos editáveis
+                  div(class="ger-section",
+                      div(class="ger-sec-title","Ajustes"),
+                      # Receita — campo sensível com indicação de valor original
+                      div(style=paste0("display:grid;grid-template-columns:1.8fr 1fr 1.1fr 64px;",
+                                       "align-items:center;gap:10px;padding:8px 0;",
+                                       "border-bottom:2px solid #f0f4f8;margin-bottom:4px;"),
+                          div(style="display:flex;flex-direction:column;",
+                              div(class="ger-field-lbl", "Receita Bruta"),
+                              div(style="font-size:10px;color:#d97706;font-weight:600;margin-top:2px;",
+                                  "Ajuste pontual — não altera a base do Drive")),
+                          div(style="display:flex;flex-direction:column;",
+                              div(class="ger-field-orig", brl(row$receita_bruta)),
+                              div(style="font-size:9px;color:#9aa5b4;","valor original")),
+                          div(class="ger-field-input",
+                              numericInput(paste0("ger_rec_",ks), NULL,
+                                           value = round(rec_ed, 2),
+                                           min = 0, step = 0.01, width = "100%")),
+                          fmt_diff(row$receita_bruta, rec_ed)
+                      ),
+                      div(class="ger-field-row",
+                          div(class="ger-field-lbl","Taxa Administrativa"),
+                          div(class="ger-field-orig", brl(row$taxa_adm)),
+                          div(class="ger-field-input", numericInput(paste0("ger_taxa_",ks), NULL, value=round(taxa_ed,2), min=0, step=0.01, width="100%")),
+                          fmt_diff(row$taxa_adm, taxa_ed)),
+                      div(class="ger-field-row",
+                          div(class="ger-field-lbl","Manutenção"),
+                          div(class="ger-field-orig", brl(row$manutencao_total)),
+                          div(class="ger-field-input", numericInput(paste0("ger_man_",ks), NULL, value=round(man_ed,2), min=0, step=0.01, width="100%")),
+                          fmt_diff(row$manutencao_total, man_ed)),
+                      div(class="ger-field-row",
+                          div(class="ger-field-lbl","Reposição"),
+                          div(class="ger-field-orig", brl(row$reposicao_total)),
+                          div(class="ger-field-input", numericInput(paste0("ger_rep_",ks), NULL, value=round(rep_ed,2), min=0, step=0.01, width="100%")),
+                          fmt_diff(row$reposicao_total, rep_ed)),
+                      div(class="ger-field-row",
+                          div(class="ger-field-lbl","Despesas Fixas"),
+                          div(class="ger-field-orig", brl(row$despesas_total)),
+                          div(class="ger-field-input", numericInput(paste0("ger_des_",ks), NULL, value=round(des_ed,2), min=0, step=0.01, width="100%")),
+                          fmt_diff(row$despesas_total, des_ed))
+                  ),
+                  
+                  # Nota interna
+                  div(class="ger-section",
+                      div(class="ger-sec-title","Nota interna"),
+                      tags$textarea(id=paste0("ger_nota_",ks), class="ger-nota",
+                                    placeholder="Observação interna (não visível ao proprietário)", nota_ed)
+                  ),
+                  
+                  # Confirmação de publicação
+                  if (pub) div(class="ger-pub-confirm",
+                               paste0("Publicado em ", rv$ger_pub[[key]], " — dados disponíveis para o proprietário.")),
+                  
+                  # Botões
+                  div(class="ger-actions",
+                      tags$button("Restaurar",
+                                  class="ger-btn ger-btn-secondary",
+                                  onclick=sprintf("Shiny.setInputValue('ger_rst_%s', Math.random(), {priority:'event'})", ks)),
+                      tags$button("Salvar rascunho",
+                                  class="ger-btn ger-btn-draft",
+                                  onclick=sprintf("Shiny.setInputValue('ger_save_%s', Math.random(), {priority:'event'})", ks)),
+                      tags$button(if(pub)"Republicar" else "Publicar",
+                                  class="ger-btn ger-btn-pub",
+                                  onclick=sprintf("Shiny.setInputValue('ger_pub_%s', Math.random(), {priority:'event'})", ks))
+                  )
+              )
+          )
+      )
+    })
+    
+    tagList(
+      # JS: toggle isolado (não dispara Shiny), busca local sem re-render
+      tags$script(HTML("
+        function gerToggle(id) {
+          var body = document.getElementById(id);
+          var ks   = id.replace('gbody_','');
+          var chev = document.getElementById('chev_' + ks);
+          if (!body) return;
+          if (body.style.display === 'none' || body.style.display === '') {
+            body.style.display = 'block';
+            if (chev) chev.classList.add('open');
+          } else {
+            body.style.display = 'none';
+            if (chev) chev.classList.remove('open');
+          }
+        }
+        // Busca local: filtra cards sem re-render Shiny
+        document.addEventListener('input', function(e) {
+          if (e.target && e.target.id === 'ger_search_input') {
+            var q = e.target.value.toLowerCase();
+            document.querySelectorAll('.ger-apto-card').forEach(function(card) {
+              var s = (card.getAttribute('data-search') || '').toLowerCase();
+              card.style.display = (q === '' || s.indexOf(q) >= 0) ? '' : 'none';
+            });
+          }
+        });
+        // Captura textarea nota
+        document.addEventListener('change', function(e) {
+          if (e.target && e.target.classList.contains('ger-nota')) {
+            Shiny.setInputValue(e.target.id, e.target.value, {priority:'event'});
+          }
+        });
+      ")),
+      !!!cards
+    )
+  })
+  
+  
+  # ── Observers: toggle expand ────────────────────────────────
+  # (tratado via JS puro acima — sem observer R necessário)
+  
+  # ── Observer: Salvar rascunho (dinâmico) ────────────────────
+  observe({
+    df <- ger_dados(); req(df, nrow(df) > 0)
+    lapply(seq_len(nrow(df)), function(i) {
+      mes  <- as.character(df$competencia[i])
+      apto <- df$imovel[i]
+      key  <- .ger_key(mes, apto)
+      ks   <- gsub("[^a-zA-Z0-9]", "_", key)
+      
+      id_save <- paste0("ger_save_",  ks)
+      id_taxa <- paste0("ger_taxa_",  ks)
+      id_man  <- paste0("ger_man_",   ks)
+      id_rep  <- paste0("ger_rep_",   ks)
+      id_des  <- paste0("ger_des_",   ks)
+      id_nota <- paste0("ger_nota_",  ks)
+      id_rst  <- paste0("ger_rst_",   ks)
+      id_pub  <- paste0("ger_pub_",   ks)
+      
+      # Salvar rascunho
+      observeEvent(input[[id_save]], {
+        edits <- list(
+          taxa_adm   = as.numeric(input[[id_taxa]] %||% df$taxa_adm[i]),
+          manutencao = as.numeric(input[[id_man]]  %||% df$manutencao_total[i]),
+          reposicao  = as.numeric(input[[id_rep]]  %||% df$reposicao_total[i]),
+          despesas   = as.numeric(input[[id_des]]  %||% df$despesas_total[i]),
+          nota       = as.character(input[[id_nota]] %||% "")
+        )
+        rv$ger_edits[[key]] <- edits
+        # Grava rascunho no SQLite (publicado = FALSE)
+        .ger_save_sqlite(mes, apto, df$cpf_cnpj[i], edits, publicado = FALSE)
+        showNotification(paste0("Rascunho salvo — ", apto),
+                         type = "message", duration = 3)
+      }, ignoreInit = TRUE, ignoreNULL = TRUE)
+      
+      # Restaurar originais
+      observeEvent(input[[id_rst]], {
+        rv$ger_edits[[key]] <- NULL
+        rv$ger_pub[[key]]   <- NULL
+        # Remove do SQLite
+        tryCatch(ger_delete_ajuste(mes, apto), error = function(e) NULL)
+        updateNumericInput(session, id_rec,  value = round(df$receita_bruta[i], 2))
+        updateNumericInput(session, id_taxa, value = round(df$taxa_adm[i], 2))
+        updateNumericInput(session, id_man,  value = round(df$manutencao_total[i], 2))
+        updateNumericInput(session, id_rep,  value = round(df$reposicao_total[i], 2))
+        updateNumericInput(session, id_des,  value = round(df$despesas_total[i], 2))
+        showNotification(paste0("Restaurado — ", apto),
+                         type = "warning", duration = 3)
+      }, ignoreInit = TRUE, ignoreNULL = TRUE)
+      
+      # Publicar
+      observeEvent(input[[id_pub]], {
+        # Salva edições antes de publicar (inclui ajuste de receita)
+        rec_val_p  <- as.numeric(input[[id_rec]] %||% df$receita_bruta[i])
+        rec_aj_p   <- if (abs(rec_val_p - as.numeric(df$receita_bruta[i])) > 0.01)
+          rec_val_p else NULL
+        edits <- list(
+          taxa_adm       = as.numeric(input[[id_taxa]] %||% df$taxa_adm[i]),
+          manutencao     = as.numeric(input[[id_man]]  %||% df$manutencao_total[i]),
+          reposicao      = as.numeric(input[[id_rep]]  %||% df$reposicao_total[i]),
+          despesas       = as.numeric(input[[id_des]]  %||% df$despesas_total[i]),
+          receita_ajuste = rec_aj_p,
+          rec_original   = as.numeric(df$receita_bruta[i]),
+          nota           = as.character(input[[id_nota]] %||% "")
+        )
+        rv$ger_edits[[key]] <- edits
+        ts <- format(Sys.time(), "%d/%m/%Y %H:%M")
+        rv$ger_pub[[key]]   <- ts
+        
+        # Write-back para Google Sheets (aba ger_ajustes no DB_MASTER)
+        cpf <- df$cpf_cnpj[i]
+        # Grava no SQLite como publicado (publicado = TRUE)
+        .ger_save_sqlite(mes, apto, cpf, edits, publicado = TRUE)
+        
+        # Propaga os valores revisados para rv$app_data do proprietário
+        cpf <- df$cpf_cnpj[i]
+        if (!is.null(rv$app_data[[cpf]]$receitas)) {
+          idx_r <- which(rv$app_data[[cpf]]$receitas$competencia == mes &
+                           rv$app_data[[cpf]]$receitas$imovel == apto)
+          if (length(idx_r) > 0) {
+            # Receita: aplica ajuste se foi modificada
+            if (!is.null(edits$receita_ajuste) && !is.na(edits$receita_ajuste))
+              rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] <- edits$receita_ajuste
+            rv$app_data[[cpf]]$receitas$taxa_adm[idx_r]         <- edits$taxa_adm
+            rv$app_data[[cpf]]$receitas$manutencao_total[idx_r] <- edits$manutencao
+            rv$app_data[[cpf]]$receitas$reposicao_total[idx_r]  <- edits$reposicao
+            rv$app_data[[cpf]]$receitas$despesas_total[idx_r]   <- edits$despesas
+            rv$app_data[[cpf]]$receitas$outros_custos[idx_r] <-
+              edits$manutencao + edits$reposicao + edits$despesas
+            rv$app_data[[cpf]]$receitas$resultado_liq[idx_r] <-
+              rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
+              edits$taxa_adm -
+              (edits$manutencao + edits$reposicao + edits$despesas)
+          }
+        }
+        
+        showNotification(
+          paste0("Publicado — ", apto, " (", df$proprietario[i], ")"),
+          type = "message", duration = 5
+        )
+      }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    })
+  })
+  
+  # ── Observer: Publicar todos revisados ──────────────────────
+  observeEvent(input$ger_pub_todos, {
+    df <- ger_dados(); req(df, nrow(df) > 0)
+    n_pub <- 0
+    for (i in seq_len(nrow(df))) {
+      key <- .ger_key(df$competencia[i], df$imovel[i])
+      if (.ger_status(key) == "rev" && !.ger_is_pub(key)) {
+        ts_all <- format(Sys.time(), "%d/%m/%Y %H:%M")
+        rv$ger_pub[[key]] <- ts_all
+        # Propaga valores salvos em rascunho e faz write-back
+        edits <- rv$ger_edits[[key]]
+        if (!is.null(edits)) {
+          cpf <- df$cpf_cnpj[i]
+          .ger_save_sqlite(as.character(df$competencia[i]), df$imovel[i], cpf, edits, publicado = TRUE)
+          cpf <- df$cpf_cnpj[i]
+          mes <- as.character(df$competencia[i])
+          apto <- df$imovel[i]
+          if (!is.null(rv$app_data[[cpf]]$receitas)) {
+            idx_r <- which(rv$app_data[[cpf]]$receitas$competencia == mes &
+                             rv$app_data[[cpf]]$receitas$imovel == apto)
+            if (length(idx_r) > 0) {
+              rv$app_data[[cpf]]$receitas$taxa_adm[idx_r]         <- edits$taxa_adm
+              rv$app_data[[cpf]]$receitas$manutencao_total[idx_r] <- edits$manutencao
+              rv$app_data[[cpf]]$receitas$reposicao_total[idx_r]  <- edits$reposicao
+              rv$app_data[[cpf]]$receitas$despesas_total[idx_r]   <- edits$despesas
+              rv$app_data[[cpf]]$receitas$outros_custos[idx_r]    <-
+                edits$manutencao + edits$reposicao + edits$despesas
+              rv$app_data[[cpf]]$receitas$resultado_liq[idx_r]    <-
+                rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
+                edits$taxa_adm -
+                (edits$manutencao + edits$reposicao + edits$despesas)
+            }
+          }
+        }
+        n_pub <- n_pub + 1
+      }
+    }
+    if (n_pub > 0)
+      showNotification(paste0(n_pub, " apartamento(s) publicados."),
+                       type = "message", duration = 5)
+    else
+      showNotification("Nenhum rascunho em revisão para publicar.",
+                       type = "warning", duration = 3)
+  }, ignoreInit = TRUE)
   
 } # fim server
 

@@ -287,6 +287,95 @@ sqlite_tables_exist <- function(tables, con = NULL) {
   all(vapply(tables, DBI::dbExistsTable, logical(1), conn = con))
 }
 
+# ── Gerencial: tabela de ajustes no SQLite ───────────────────
+# Camada de sobreposição: não toca no Drive, persiste no disco.
+
+ger_ensure_table <- function(con = NULL) {
+  own <- is.null(con); if (own) con <- sqlite_connect()
+  on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
+  if (!DBI::dbExistsTable(con, "ger_ajustes")) {
+    DBI::dbExecute(con, "
+      CREATE TABLE ger_ajustes (
+        mes             TEXT NOT NULL,
+        apto            TEXT NOT NULL,
+        cpf_cnpj        TEXT NOT NULL,
+        taxa_adm        REAL DEFAULT 0,
+        manutencao      REAL DEFAULT 0,
+        reposicao       REAL DEFAULT 0,
+        despesas        REAL DEFAULT 0,
+        receita_ajuste  REAL DEFAULT NULL,
+        rec_original    REAL DEFAULT NULL,
+        nota            TEXT DEFAULT \'\',
+        publicado       INTEGER DEFAULT 0,
+        ts              TEXT,
+        PRIMARY KEY (mes, apto)
+      )
+    ")
+    message("[Ger] Tabela ger_ajustes criada no SQLite.")
+  } else {
+    # Migração: adiciona colunas novas se tabela já existia sem elas
+    cols <- DBI::dbListFields(con, "ger_ajustes")
+    if (!"receita_ajuste" %in% cols)
+      DBI::dbExecute(con, "ALTER TABLE ger_ajustes ADD COLUMN receita_ajuste REAL DEFAULT NULL")
+    if (!"rec_original" %in% cols)
+      DBI::dbExecute(con, "ALTER TABLE ger_ajustes ADD COLUMN rec_original REAL DEFAULT NULL")
+  }
+  invisible(TRUE)
+}
+
+# Grava ou atualiza um ajuste (rascunho ou publicado)
+ger_save_ajuste <- function(mes, apto, cpf_cnpj, taxa_adm, manutencao,
+                            reposicao, despesas, nota = "",
+                            receita_ajuste = NULL, rec_original = NULL,
+                            publicado = FALSE, con = NULL) {
+  own <- is.null(con); if (own) con <- sqlite_connect()
+  on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
+  ger_ensure_table(con)
+  ts  <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  pub <- as.integer(isTRUE(publicado))
+  # receita_ajuste: NULL = não houve ajuste de receita (mantém original)
+  rec_aj  <- if (is.null(receita_ajuste) || is.na(receita_ajuste)) NA_real_
+  else as.numeric(receita_ajuste)
+  rec_ori <- if (is.null(rec_original)   || is.na(rec_original))   NA_real_
+  else as.numeric(rec_original)
+  DBI::dbExecute(con,
+                 "INSERT OR REPLACE INTO ger_ajustes
+       (mes, apto, cpf_cnpj, taxa_adm, manutencao, reposicao, despesas,
+        receita_ajuste, rec_original, nota, publicado, ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 params = list(as.character(mes), as.character(apto),
+                               gsub("[^0-9]","",as.character(cpf_cnpj)),
+                               as.numeric(taxa_adm), as.numeric(manutencao),
+                               as.numeric(reposicao), as.numeric(despesas),
+                               rec_aj, rec_ori,
+                               as.character(nota), pub, ts)
+  )
+  invisible(TRUE)
+}
+
+# Lê todos os ajustes (rascunhos + publicados)
+ger_load_ajustes <- function(con = NULL) {
+  own <- is.null(con); if (own) con <- sqlite_connect()
+  on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
+  ger_ensure_table(con)
+  tryCatch(
+    DBI::dbReadTable(con, "ger_ajustes"),
+    error = function(e) data.frame()
+  )
+}
+
+# Remove um ajuste (restaurar para original)
+ger_delete_ajuste <- function(mes, apto, con = NULL) {
+  own <- is.null(con); if (own) con <- sqlite_connect()
+  on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
+  ger_ensure_table(con)
+  DBI::dbExecute(con,
+                 "DELETE FROM ger_ajustes WHERE mes = ? AND apto = ?",
+                 params = list(as.character(mes), as.character(apto))
+  )
+  invisible(TRUE)
+}
+
 # ── Leitura e normalização do xlsx ────────────────────────────
 ler_e_processar_db_master <- function(path_xlsx) {
   stopifnot(file.exists(path_xlsx))
@@ -719,13 +808,61 @@ montar_objeto_app_sqlite <- function(con) {
     )
   
   # ── 9. Lista final por cpf_cnpj ──────────────────────────────
+  # Carrega ajustes gerenciais uma única vez antes do loop
+  ger_ajustes_cache <- tryCatch(ger_load_ajustes(con), error = function(e) data.frame())
+  
   obj <- lapply(owners$cpf_cnpj, function(cpf) {
     orow <- owners |>
       dplyr::filter(cpf_cnpj == cpf) |>
       dplyr::slice(1)
     
     port <- if (nrow(portfolio) > 0) portfolio |> dplyr::filter(cpf_cnpj == cpf) else data.frame()
-    recs <- agg |> dplyr::filter(cpf_cnpj == cpf)
+    # Aplicar ajustes gerenciais publicados sobre os dados base
+    recs_base <- agg |> dplyr::filter(cpf_cnpj == cpf)
+    recs <- tryCatch({
+      if (exists("ger_ajustes_cache") && !is.null(ger_ajustes_cache) && nrow(ger_ajustes_cache) > 0) {
+        aj <- ger_ajustes_cache |>
+          dplyr::filter(publicado == 1L) |>
+          dplyr::mutate(
+            mes_chr  = substr(as.character(mes), 1, 7),
+            apto_chr = as.character(apto)
+          )
+        if (nrow(aj) > 0) {
+          recs_base |>
+            dplyr::mutate(
+              .mes_chr  = substr(as.character(competencia), 1, 7),
+              .apto_chr = as.character(imovel)
+            ) |>
+            dplyr::left_join(
+              aj |> dplyr::select(mes_chr, apto_chr,
+                                  ger_taxa = taxa_adm,
+                                  ger_man  = manutencao,
+                                  ger_rep  = reposicao,
+                                  ger_des  = despesas,
+                                  ger_rec  = receita_ajuste),
+              by = c(".mes_chr" = "mes_chr", ".apto_chr" = "apto_chr")
+            ) |>
+            dplyr::mutate(
+              # Receita: usa ajuste se preenchido, senão mantém original
+              receita_bruta    = dplyr::if_else(!is.na(ger_rec), ger_rec, receita_bruta),
+              taxa_adm         = dplyr::if_else(!is.na(ger_taxa), ger_taxa, taxa_adm),
+              manutencao_total = dplyr::if_else(!is.na(ger_man),  ger_man,  manutencao_total),
+              reposicao_total  = dplyr::if_else(!is.na(ger_rep),  ger_rep,  reposicao_total),
+              despesas_total   = dplyr::if_else(!is.na(ger_des),  ger_des,  despesas_total),
+              outros_custos    = dplyr::if_else(!is.na(ger_man),
+                                                dplyr::coalesce(ger_man,0) +
+                                                  dplyr::coalesce(ger_rep,0) +
+                                                  dplyr::coalesce(ger_des,0),
+                                                outros_custos),
+              resultado_liq    = receita_bruta - taxa_adm - outros_custos
+            ) |>
+            dplyr::select(-dplyr::starts_with("."), -dplyr::starts_with("ger_"))
+        } else { recs_base }
+      } else { recs_base }
+    }, error = function(e) {
+      message("[Ger] AVISO ao aplicar ajustes: ", e$message)
+      recs_base
+    })
     cal  <- if (!is.null(calendario) && nrow(calendario) > 0) calendario |> dplyr::filter(cpf_cnpj == cpf) else data.frame()
     resv <- if (nrow(reservas_clean) > 0) reservas_clean |> dplyr::filter(cpf_cnpj == cpf) else data.frame()
     man  <- if (nrow(manutencao_clean) > 0) manutencao_clean |> dplyr::filter(cpf_cnpj == cpf) else data.frame()
