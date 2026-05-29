@@ -136,9 +136,10 @@ a{color:inherit;text-decoration:none;}
 .btn-dl{background:rgba(0,179,136,.15);border:1px solid rgba(0,179,136,.35);color:#34d99e;
   border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;
   font-family:'Inter',sans-serif;white-space:nowrap;transition:all .15s;text-decoration:none;
-  display:inline-flex;align-items:center;gap:6px;}
+  display:inline-flex;align-items:center;gap:6px;line-height:1;}
 .btn-dl:hover{background:rgba(0,179,136,.25);border-color:rgba(0,179,136,.6);color:#fff;}
 .btn-dl svg{flex-shrink:0;}
+.btn-dl-ready{background:rgba(0,179,136,.25);border-color:rgba(0,179,136,.5);font-size:10px;}
 .hdr-badge{background:#1a3350;color:#5ab4ff;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.6px;display:inline-block;margin-top:4px;}
 
 /* ══ SYNC BAR ════════════════════════════════════════════════ */
@@ -332,21 +333,22 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
               div(class = "hdr-sub",   "Painel de acompanhamento de resultados"))
       ),
       uiOutput("hdr_prop"),
-      # downloadButton na UI estática — downloadHandler NÃO funciona dentro de renderUI
-      # Fica oculto até o login; JS o exibe após autenticação
-      tags$div(id = "dl_carteira_wrap", style = "display:none;",
-               downloadButton("dl_carteira",
-                              label = tagList(
-                                tags$svg(xmlns="http://www.w3.org/2000/svg",
-                                         width="13", height="13", viewBox="0 0 24 24",
-                                         fill="none", stroke="currentColor",
-                                         `stroke-width`="2.5",
-                                         `stroke-linecap`="round", `stroke-linejoin`="round",
-                                         tags$polyline(points="8 17 12 21 16 17"),
-                                         tags$line(x1="12", y1="12", x2="12", y2="21"),
-                                         tags$path(d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29")),
-                                "Baixar Planilha"),
-                              class = "btn-dl"))
+      # Botão gera xlsx + link aparece ao lado
+      div(style="display:flex;align-items:center;gap:6px;",
+          uiOutput("dl_link_wrap"),
+          tags$button(
+            id      = "btn_gerar_dl",
+            class   = "btn-dl",
+            onclick = "Shiny.setInputValue('btn_gerar_dl', Math.random(), {priority:'event'})",
+            tags$svg(xmlns="http://www.w3.org/2000/svg", width="13", height="13",
+                     viewBox="0 0 24 24", fill="none", stroke="currentColor",
+                     `stroke-width`="2.5", `stroke-linecap`="round", `stroke-linejoin`="round",
+                     tags$polyline(points="8 17 12 21 16 17"),
+                     tags$line(x1="12", y1="12", x2="12", y2="21"),
+                     tags$path(d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29")),
+            "Baixar Planilha"
+          )
+      )
   ),
   uiOutput("sync_bar"),
   
@@ -520,18 +522,15 @@ server <- function(input, output, session) {
     d <- dados(); req(d)
     nome <- session$userData$auth_owner_name %||% d$proprietario %||% "Proprietário"
     tipo <- session$userData$auth_doc_type   %||% "CPF/CNPJ"
-    tagList(
-      tags$script(HTML("document.getElementById('dl_carteira_wrap').style.display='flex';")),
-      div(style = "display:flex;align-items:center;gap:10px;",
-          div(class = "hdr-prop", tags$b(nome), br(), div(class = "hdr-badge", tipo)),
-          tags$button(
-            style = paste0("background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);",
-                           "color:#c9dff2;border-radius:8px;padding:6px 12px;font-size:11px;",
-                           "font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;",
-                           "white-space:nowrap;transition:background .15s;"),
-            onclick = "Shiny.setInputValue('nav_alterar_senha', Math.random())",
-            "Alterar Senha")
-      )
+    div(style = "display:flex;align-items:center;gap:10px;",
+        div(class = "hdr-prop", tags$b(nome), br(), div(class = "hdr-badge", tipo)),
+        tags$button(
+          style = paste0("background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);",
+                         "color:#c9dff2;border-radius:8px;padding:6px 12px;font-size:11px;",
+                         "font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;",
+                         "white-space:nowrap;transition:background .15s;"),
+          onclick = "Shiny.setInputValue('nav_alterar_senha', Math.random())",
+          "Alterar Senha")
     )
   })
   
@@ -1544,333 +1543,287 @@ server <- function(input, output, session) {
   
   
   # ═══════════════════════════════════════════════════════════
-  # DOWNLOAD — Planilha Excel da carteira do proprietário
-  # Abas: Resumo | uma por imóvel | Reservas | Custos
-  # Usa openxlsx. Dados já filtrados por CPF/CNPJ do proprietário.
+  # DOWNLOAD — Planilha Excel via /tmp + link direto
+  # Estratégia: gera xlsx em /tmp, serve via addResourcePath,
+  # exibe link <a href> que o browser baixa sem downloadHandler.
+  # Isso resolve o conflito com renderUI / sys.source do app.R.
   # ═══════════════════════════════════════════════════════════
-  output$dl_carteira <- downloadHandler(
+  
+  # Gera o xlsx e retorna o path em /tmp
+  .gerar_xlsx <- function(d) {
+    if (!requireNamespace("openxlsx", quietly = TRUE))
+      stop("Pacote openxlsx não instalado.")
     
-    filename = function() {
-      d    <- dados()
-      nome <- if (!is.null(d)) gsub("[^A-Za-z0-9]", "_", d$proprietario %||% "carteira") else "carteira"
-      paste0("BSBStay_", nome, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
-    },
+    nome_prop <- gsub("[^A-Za-z0-9]", "_", d$proprietario %||% "carteira")
+    fname     <- paste0("BSBStay_", nome_prop, "_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
+    fpath     <- file.path(tempdir(), fname)
     
-    content = function(file) {
-      d <- dados()
-      req(d)
+    recs <- d$receitas
+    
+    # ── Estilos ──────────────────────────────────────────────
+    cor_hdr <- "#0F1C2E"; cor_tx <- "#FFFFFF"; cor_acc <- "#1A6EF7"
+    cor_grn <- "#00B388"; cor_red <- "#E03E3E"; cor_str <- "#F8FAFC"
+    
+    st_hdr <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                    fontColour=cor_tx, fgFill=cor_hdr, halign="CENTER",
+                                    textDecoration="bold", border="Bottom", borderColour=cor_acc)
+    st_brl_pos <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                        fontColour=cor_grn, halign="RIGHT", numFmt='"R$" #,##0.00',
+                                        textDecoration="bold")
+    st_brl_neg <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                        fontColour=cor_red, halign="RIGHT", numFmt='"R$" #,##0.00',
+                                        textDecoration="bold")
+    st_brl <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                    halign="RIGHT", numFmt='"R$" #,##0.00')
+    st_pct <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                    halign="RIGHT", numFmt="0.0%")
+    st_dat <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                    halign="CENTER", numFmt="DD/MM/YYYY")
+    st_str <- openxlsx::createStyle(fgFill=cor_str)
+    st_ttl <- openxlsx::createStyle(fontName="Arial", fontSize=14,
+                                    fontColour=cor_hdr, textDecoration="bold")
+    st_sub <- openxlsx::createStyle(fontName="Arial", fontSize=10,
+                                    fontColour="#6B7280")
+    
+    wb <- openxlsx::createWorkbook()
+    openxlsx::modifyBaseFont(wb, fontName="Arial", fontSize=10)
+    
+    .aba <- function(wb, nm, df, col_brl=c(), col_brl_res=c(), col_pct=c(), col_dat=c(),
+                     cor_aba="#5A7A96", titulo=NULL, subtitulo=NULL) {
+      # Guard: sem dados
+      if (is.null(df) || nrow(df) == 0 || ncol(df) == 0) return(invisible())
       
-      if (!requireNamespace("openxlsx", quietly = TRUE))
-        stop("Pacote openxlsx não instalado.")
+      # Sanitiza nome (Excel: max 31 chars, sem /\[]?*:)
+      nm <- substr(gsub("[/\\\\\\[\\]\\?\\*:]", " ", nm), 1, 31)
       
-      # ── Paleta de cores ──────────────────────────────────
-      cor_hdr    <- "#0F1C2E"   # fundo do cabeçalho (azul-escuro MIRAI)
-      cor_hdr_tx <- "#FFFFFF"   # texto do cabeçalho
-      cor_acc    <- "#1A6EF7"   # azul de destaque
-      cor_grn    <- "#00B388"   # verde resultado positivo
-      cor_red    <- "#E03E3E"   # vermelho resultado negativo
-      cor_stripe <- "#F8FAFC"   # linha zebrada par
+      # Evita nomes duplicados
+      existing <- names(wb)
+      if (nm %in% existing) {
+        for (k in 2:99) {
+          nm2 <- substr(paste0(nm, " ", k), 1, 31)
+          if (!nm2 %in% existing) { nm <- nm2; break }
+        }
+      }
       
-      # ── Estilos base ─────────────────────────────────────
-      st_hdr <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, fontColour = cor_hdr_tx,
-        fgFill = cor_hdr, halign = "CENTER", valign = "CENTER",
-        textDecoration = "bold", border = "Bottom",
-        borderColour = cor_acc, wrapText = FALSE)
+      openxlsx::addWorksheet(wb, nm, tabColour = cor_aba)
       
-      st_body <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, halign = "LEFT",
-        valign = "CENTER", border = "Bottom", borderColour = "#EAF0F6")
+      # Título e subtítulo opcionais
+      hdr_offset <- 0L
+      if (!is.null(titulo) && nzchar(titulo)) {
+        openxlsx::writeData(wb, nm, data.frame(x = titulo), startRow = 1, colNames = FALSE)
+        openxlsx::addStyle(wb, nm, st_ttl, rows = 1, cols = 1)
+        hdr_offset <- 2L
+      }
+      if (!is.null(subtitulo) && nzchar(subtitulo)) {
+        openxlsx::writeData(wb, nm, data.frame(x = subtitulo), startRow = 2, colNames = FALSE)
+        openxlsx::addStyle(wb, nm, st_sub, rows = 2, cols = 1)
+        hdr_offset <- max(hdr_offset, 2L)
+      }
       
-      st_brl <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, halign = "RIGHT",
-        numFmt = "\"R$\" #,##0.00", border = "Bottom", borderColour = "#EAF0F6")
+      tbl_start  <- 1L + hdr_offset
+      data_start <- tbl_start + 1L
+      nr <- nrow(df)
+      nc <- ncol(df)
       
-      st_pct <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, halign = "RIGHT",
-        numFmt = "0.0%", border = "Bottom", borderColour = "#EAF0F6")
+      openxlsx::writeData(wb, nm, df, startRow = tbl_start, headerStyle = st_hdr)
+      tryCatch(openxlsx::freezePane(wb, nm, firstActiveRow = data_start),
+               error = function(e) NULL)
       
-      st_date <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, halign = "CENTER",
-        numFmt = "DD/MM/YYYY", border = "Bottom", borderColour = "#EAF0F6")
-      
-      st_stripe <- openxlsx::createStyle(fgFill = cor_stripe)
-      
-      st_pos <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, fontColour = cor_grn,
-        halign = "RIGHT", numFmt = "\"R$\" #,##0.00",
-        textDecoration = "bold", border = "Bottom", borderColour = "#EAF0F6")
-      
-      st_neg <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, fontColour = cor_red,
-        halign = "RIGHT", numFmt = "\"R$\" #,##0.00",
-        textDecoration = "bold", border = "Bottom", borderColour = "#EAF0F6")
-      
-      st_title <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 14, fontColour = cor_hdr,
-        textDecoration = "bold", halign = "LEFT")
-      
-      st_sub <- openxlsx::createStyle(
-        fontName = "Arial", fontSize = 10, fontColour = "#6B7280",
-        halign = "LEFT")
-      
-      # ── Helper: formata aba ───────────────────────────────
-      .fmt_aba <- function(wb, sheet, df_data,
-                           col_brl   = character(),
-                           col_pct   = character(),
-                           col_date  = character(),
-                           col_right = character(),
-                           freeze_row = 4L) {
-        nr <- nrow(df_data)
-        nc <- ncol(df_data)
-        if (nr == 0 || nc == 0) return(invisible())
-        
-        # Cabeçalho na linha 3, dados a partir da linha 4
-        openxlsx::writeData(wb, sheet, df_data,
-                            startRow = freeze_row, startCol = 1,
-                            headerStyle = st_hdr, borders = "all",
-                            borderColour = "#EAF0F6")
-        
-        # Zebra nas linhas pares
-        for (r in seq(2, nr, by = 2)) {
-          openxlsx::addStyle(wb, sheet, st_stripe,
-                             rows = freeze_row + r, cols = 1:nc,
+      # Zebra (pula se menos de 2 linhas)
+      if (nr >= 2L) {
+        for (r in seq(2L, nr, by = 2L))
+          openxlsx::addStyle(wb, nm, st_str,
+                             rows = data_start + r - 1L, cols = seq_len(nc),
                              gridExpand = TRUE, stack = TRUE)
-        }
-        
-        # Formatos por coluna
-        for (nm in col_brl) {
-          if (!nm %in% names(df_data)) next
-          ci <- which(names(df_data) == nm)
-          pos_rows <- which(df_data[[nm]] >= 0) + freeze_row
-          neg_rows <- which(df_data[[nm]] <  0) + freeze_row
-          if (length(pos_rows) > 0)
-            openxlsx::addStyle(wb, sheet, st_pos, rows = pos_rows, cols = ci,
-                               gridExpand = FALSE, stack = TRUE)
-          if (length(neg_rows) > 0)
-            openxlsx::addStyle(wb, sheet, st_neg, rows = neg_rows, cols = ci,
-                               gridExpand = FALSE, stack = TRUE)
-        }
-        for (nm in col_pct) {
-          if (!nm %in% names(df_data)) next
-          ci <- which(names(df_data) == nm)
-          openxlsx::addStyle(wb, sheet, st_pct,
-                             rows = seq(freeze_row + 1, freeze_row + nr),
-                             cols = ci, gridExpand = FALSE, stack = TRUE)
-        }
-        for (nm in col_date) {
-          if (!nm %in% names(df_data)) next
-          ci <- which(names(df_data) == nm)
-          openxlsx::addStyle(wb, sheet, st_date,
-                             rows = seq(freeze_row + 1, freeze_row + nr),
-                             cols = ci, gridExpand = FALSE, stack = TRUE)
-        }
-        for (nm in col_right) {
-          if (!nm %in% names(df_data)) next
-          ci <- which(names(df_data) == nm)
-          openxlsx::addStyle(wb, sheet, st_body,
-                             rows = seq(freeze_row + 1, freeze_row + nr),
-                             cols = ci, gridExpand = FALSE, stack = TRUE)
-        }
-        
-        # Auto-width e freeze
-        openxlsx::setColWidths(wb, sheet, cols = 1:nc, widths = "auto")
-        openxlsx::freezePane(wb, sheet, firstDataRow = freeze_row + 1)
-        
-        invisible()
       }
       
-      # ── Helper: título e subtítulo ────────────────────────
-      .write_title <- function(wb, sheet, titulo, subtitulo) {
-        openxlsx::writeData(wb, sheet, data.frame(x = titulo),
-                            startRow = 1, startCol = 1, colNames = FALSE)
-        openxlsx::addStyle(wb, sheet, st_title, rows = 1, cols = 1)
-        openxlsx::writeData(wb, sheet, data.frame(x = subtitulo),
-                            startRow = 2, startCol = 1, colNames = FALSE)
-        openxlsx::addStyle(wb, sheet, st_sub, rows = 2, cols = 1)
+      # Range de linhas de dados (vazio se nr == 0)
+      if (nr < 1L) return(invisible())
+      rng <- seq(data_start, data_start + nr - 1L)
+      
+      for (col in col_brl) {
+        ci <- match(col, names(df)); if (is.na(ci)) next
+        openxlsx::addStyle(wb, nm, st_brl, rows = rng, cols = ci, stack = TRUE)
+      }
+      for (col in col_brl_res) {
+        ci <- match(col, names(df)); if (is.na(ci)) next
+        vals <- suppressWarnings(as.numeric(df[[col]]))
+        pos <- which(!is.na(vals) & vals >= 0) + data_start - 1L
+        neg <- which(!is.na(vals) & vals <  0) + data_start - 1L
+        if (length(pos) > 0) openxlsx::addStyle(wb, nm, st_brl_pos, rows = pos, cols = ci, stack = TRUE)
+        if (length(neg) > 0) openxlsx::addStyle(wb, nm, st_brl_neg, rows = neg, cols = ci, stack = TRUE)
+      }
+      for (col in col_pct) {
+        ci <- match(col, names(df)); if (is.na(ci)) next
+        openxlsx::addStyle(wb, nm, st_pct, rows = rng, cols = ci, stack = TRUE)
+      }
+      for (col in col_dat) {
+        ci <- match(col, names(df)); if (is.na(ci)) next
+        openxlsx::addStyle(wb, nm, st_dat, rows = rng, cols = ci, stack = TRUE)
       }
       
-      # ── Dados base ────────────────────────────────────────
-      recs <- d$receitas
-      resv <- if (!is.null(d$reservas)   && nrow(d$reservas)   > 0) d$reservas   else NULL
-      man  <- if (!is.null(d$manutencao) && nrow(d$manutencao) > 0) d$manutencao else NULL
-      rep  <- if (!is.null(d$reposicao)  && nrow(d$reposicao)  > 0) d$reposicao  else NULL
-      des  <- if (!is.null(d$despesas)   && nrow(d$despesas)   > 0) d$despesas   else NULL
-      nome_prop <- d$proprietario %||% "Proprietário"
-      
-      # ── Criar workbook ────────────────────────────────────
-      wb <- openxlsx::createWorkbook()
-      openxlsx::modifyBaseFont(wb, fontName = "Arial", fontSize = 10)
-      
-      # ══════════════════════════════════════════════════════
-      # ABA 1 — RESUMO CONSOLIDADO
-      # ══════════════════════════════════════════════════════
-      openxlsx::addWorksheet(wb, "Resumo", tabColour = cor_acc)
-      
-      df_res <- recs |>
-        dplyr::mutate(
-          mes_label = tryCatch(
-            fmt_mes_pt(suppressWarnings(as.Date(paste0(
-              substr(as.character(competencia),1,7),"-01")))),
-            error = function(e) as.character(competencia))) |>
-        dplyr::group_by(`Mês` = mes_label) |>
-        dplyr::summarise(
-          `Receita Bruta (R$)`     = round(sum(receita_bruta,   na.rm=TRUE), 2),
-          `Taxa Administrativa (R$)` = round(sum(taxa_adm,      na.rm=TRUE), 2),
-          `Outros Custos (R$)`     = round(sum(outros_custos,   na.rm=TRUE), 2),
-          `Resultado Líquido (R$)` = round(sum(resultado_liq,   na.rm=TRUE), 2),
-          `Ocupação Média (%)`     = round(mean(ocupacao,       na.rm=TRUE) / 100, 4),
-          `Diária Média (R$)`      = round(mean(diaria_media,   na.rm=TRUE), 2),
-          `Noites`                 = sum(n_diarias,             na.rm=TRUE),
-          .groups = "drop"
-        ) |>
-        dplyr::arrange(`Mês`)
-      
-      .write_title(wb, "Resumo",
-                   paste0("Resumo da Carteira — ", nome_prop),
-                   paste0("Gerado em ", format(Sys.Date(), "%d/%m/%Y"),
-                          " · BSBStay · Dados de ",
-                          paste(unique(df_res$`Mês`), collapse = ", ")))
-      
-      .fmt_aba(wb, "Resumo", df_res,
-               col_brl  = c("Receita Bruta (R$)","Taxa Administrativa (R$)",
-                            "Outros Custos (R$)","Resultado Líquido (R$)","Diária Média (R$)"),
-               col_pct  = "Ocupação Média (%)",
-               col_right = "Noites")
-      
-      # ══════════════════════════════════════════════════════
-      # ABAS 2..N — UMA POR IMÓVEL
-      # ══════════════════════════════════════════════════════
-      imoveis_lista <- sort(unique(recs$imovel))
-      
-      for (im in imoveis_lista) {
-        # Nome da aba: máx 31 chars (limite Excel), sem caracteres proibidos
-        aba_nm <- substr(gsub("[/\\\\\\[\\]\\?\\*:]", " ", im), 1, 31)
-        
-        openxlsx::addWorksheet(wb, aba_nm, tabColour = "#5A7A96")
-        
-        df_im <- recs |>
-          dplyr::filter(imovel == im) |>
-          dplyr::mutate(
-            `Mês` = tryCatch(
-              fmt_mes_pt(suppressWarnings(as.Date(paste0(
-                substr(as.character(competencia),1,7),"-01")))),
-              error = function(e) as.character(competencia))) |>
-          dplyr::transmute(
-            `Mês`,
-            `Receita Bruta (R$)`     = round(receita_bruta,   2),
-            `Taxa Adm. (R$)`         = round(taxa_adm,        2),
-            `Manutenção (R$)`        = round(manutencao_total,2),
-            `Reposição (R$)`         = round(reposicao_total, 2),
-            `Despesas Fixas (R$)`    = round(despesas_total,  2),
-            `Outros Custos (R$)`     = round(outros_custos,   2),
-            `Resultado Líquido (R$)` = round(resultado_liq,   2),
-            `Ocupação (%)`           = round(ocupacao / 100,  4),
-            `Diária Média (R$)`      = round(diaria_media,    2),
-            `Noites`                 = n_diarias
-          ) |>
-          dplyr::arrange(`Mês`)
-        
-        .write_title(wb, aba_nm,
-                     paste0(im, " — Histórico Mensal"),
-                     paste0(nome_prop, " · BSBStay"))
-        
-        .fmt_aba(wb, aba_nm, df_im,
-                 col_brl  = c("Receita Bruta (R$)","Taxa Adm. (R$)","Manutenção (R$)",
-                              "Reposição (R$)","Despesas Fixas (R$)",
-                              "Outros Custos (R$)","Resultado Líquido (R$)",
-                              "Diária Média (R$)"),
-                 col_pct  = "Ocupação (%)",
-                 col_right = "Noites")
-      }
-      
-      # ══════════════════════════════════════════════════════
-      # ABA RESERVAS
-      # ══════════════════════════════════════════════════════
-      if (!is.null(resv) && nrow(resv) > 0) {
-        openxlsx::addWorksheet(wb, "Reservas", tabColour = "#7C3AED")
-        
-        df_rv <- resv |>
-          dplyr::transmute(
-            `Imóvel`          = as.character(imovel_nome %||% property_id),
-            `Check-in`        = tryCatch(as.Date(checkin),  error = function(e) NA),
-            `Check-out`       = tryCatch(as.Date(checkout), error = function(e) NA),
-            `Noites`          = as.integer(noites_total),
-            `Canal`           = as.character(origem_norm %||% ""),
-            `Diária (R$)`     = round(as.numeric(diaria_liquida), 2),
-            `Receita Total (R$)` = round(as.numeric(receita_total), 2)
-          ) |>
-          dplyr::arrange(`Imóvel`, `Check-in`)
-        
-        .write_title(wb, "Reservas",
-                     paste0("Reservas — ", nome_prop),
-                     paste0(nrow(df_rv), " reservas · BSBStay"))
-        
-        .fmt_aba(wb, "Reservas", df_rv,
-                 col_brl  = c("Diária (R$)","Receita Total (R$)"),
-                 col_date = c("Check-in","Check-out"),
-                 col_right = "Noites")
-      }
-      
-      # ══════════════════════════════════════════════════════
-      # ABA CUSTOS DISCRIMINADOS
-      # ══════════════════════════════════════════════════════
-      df_custos_list <- list()
-      
-      if (!is.null(man) && nrow(man) > 0) {
-        df_custos_list[["man"]] <- man |>
-          dplyr::mutate(
-            Tipo    = "Manutenção",
-            Imóvel  = as.character(imovel_nome %||% property_id),
-            Mês     = as.character(competencia),
-            Descrição = as.character(produto_servico %||% ""),
-            `Valor (R$)` = round(as.numeric(valor_total), 2)
-          ) |>
-          dplyr::select(Tipo, Imóvel, Mês, Descrição, `Valor (R$)`)
-      }
-      if (!is.null(rep) && nrow(rep) > 0) {
-        df_custos_list[["rep"]] <- rep |>
-          dplyr::mutate(
-            Tipo    = "Reposição",
-            Imóvel  = as.character(imovel_nome %||% property_id),
-            Mês     = as.character(competencia),
-            Descrição = as.character(item_limpo  %||% item_raw %||% ""),
-            `Valor (R$)` = round(as.numeric(valor_unitario_ou_total), 2)
-          ) |>
-          dplyr::select(Tipo, Imóvel, Mês, Descrição, `Valor (R$)`)
-      }
-      if (!is.null(des) && nrow(des) > 0) {
-        df_custos_list[["des"]] <- des |>
-          dplyr::mutate(
-            Tipo    = as.character(categoria %||% "Despesa"),
-            Imóvel  = as.character(imovel_nome %||% property_id),
-            Mês     = as.character(competencia),
-            Descrição = as.character(descricao  %||% ""),
-            `Valor (R$)` = round(as.numeric(valor), 2)
-          ) |>
-          dplyr::select(Tipo, Imóvel, Mês, Descrição, `Valor (R$)`)
-      }
-      
-      if (length(df_custos_list) > 0) {
-        openxlsx::addWorksheet(wb, "Custos", tabColour = "#D97706")
-        
-        df_cus <- dplyr::bind_rows(df_custos_list) |>
-          dplyr::arrange(Imóvel, Mês, Tipo)
-        
-        .write_title(wb, "Custos",
-                     paste0("Custos Discriminados — ", nome_prop),
-                     paste0(nrow(df_cus), " lançamentos · BSBStay"))
-        
-        .fmt_aba(wb, "Custos", df_cus,
-                 col_brl = "Valor (R$)")
-      }
-      
-      # ── Salvar para o file ────────────────────────────────
-      openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      openxlsx::setColWidths(wb, nm, cols = seq_len(nc), widths = "auto")
+      invisible()
     }
-  )
+    
+    
+    # ── Aba Resumo ───────────────────────────────────────────
+    df_res <- recs |>
+      dplyr::mutate(Mes = tryCatch(
+        fmt_mes_pt(suppressWarnings(as.Date(paste0(substr(as.character(competencia),1,7),"-01")))),
+        error=function(e) as.character(competencia))) |>
+      dplyr::group_by(`Mês`=Mes) |>
+      dplyr::summarise(
+        `Receita Bruta (R$)`     = round(sum(receita_bruta,  na.rm=TRUE),2),
+        `Taxa Adm. (R$)`         = round(sum(taxa_adm,       na.rm=TRUE),2),
+        `Outros Custos (R$)`     = round(sum(outros_custos,  na.rm=TRUE),2),
+        `Resultado Líq. (R$)`    = round(sum(resultado_liq,  na.rm=TRUE),2),
+        `Ocupação (%)`           = round(mean(ocupacao,      na.rm=TRUE)/100,4),
+        `Diária Média (R$)`      = round(mean(diaria_media,  na.rm=TRUE),2),
+        `Noites`                 = sum(n_diarias, na.rm=TRUE),
+        .groups="drop") |>
+      dplyr::arrange(`Mês`)
+    .aba(wb, "Resumo", df_res,
+         titulo    = paste0("Resumo — ", d$proprietario %||% "Proprietário"),
+         subtitulo = paste0("Gerado em ", format(Sys.Date(),"%d/%m/%Y"), " · BSBStay"),
+         col_brl     = c("Receita Bruta (R$)","Taxa Adm. (R$)","Outros Custos (R$)","Diária Média (R$)"),
+         col_brl_res = "Resultado Líq. (R$)",
+         col_pct     = "Ocupação (%)",
+         cor_aba     = cor_acc)
+    
+    # ── Aba por imóvel ───────────────────────────────────────
+    for (im in sort(unique(recs$imovel))) {
+      tryCatch({
+        df_im <- recs |> dplyr::filter(imovel==im) |>
+          dplyr::mutate(Mes=tryCatch(
+            fmt_mes_pt(suppressWarnings(as.Date(paste0(substr(as.character(competencia),1,7),"-01")))),
+            error=function(e) as.character(competencia))) |>
+          dplyr::transmute(
+            `Mês`=Mes,
+            `Receita Bruta (R$)`  = round(receita_bruta,  2),
+            `Taxa Adm. (R$)`      = round(taxa_adm,       2),
+            `Manutenção (R$)`     = round(manutencao_total,2),
+            `Reposição (R$)`      = round(reposicao_total, 2),
+            `Despesas (R$)`       = round(despesas_total,  2),
+            `Outros Custos (R$)`  = round(outros_custos,  2),
+            `Resultado Líq. (R$)` = round(resultado_liq,  2),
+            `Ocupação (%)`        = round(ocupacao/100,   4),
+            `Diária Média (R$)`   = round(diaria_media,   2),
+            `Noites`              = n_diarias) |>
+          dplyr::arrange(`Mês`)
+        .aba(wb, im, df_im,
+             col_brl=c("Receita Bruta (R$)","Taxa Adm. (R$)","Manutenção (R$)",
+                       "Reposição (R$)","Despesas (R$)","Outros Custos (R$)","Diária Média (R$)"),
+             col_brl_res="Resultado Líq. (R$)", col_pct="Ocupação (%)")
+      }, error = function(e) message("[XLSX] Erro na aba '", im, "': ", e$message))
+    }
+    
+    # ── Aba Reservas ─────────────────────────────────────────
+    resv <- tryCatch(d$reservas, error = function(e) NULL)
+    if (!is.null(resv) && nrow(resv) > 0) {
+      df_rv <- resv |>
+        dplyr::transmute(
+          `Imóvel`             = as.character(imovel_nome %||% property_id %||% apto_normalizado %||% ""),
+          `Check-in`           = tryCatch(as.Date(checkin),  error=function(e) NA),
+          `Check-out`          = tryCatch(as.Date(checkout), error=function(e) NA),
+          `Noites`             = as.integer(noites_total),
+          `Canal`              = as.character(origem_norm %||% ""),
+          `Diária (R$)`        = round(as.numeric(diaria_liquida),    2),
+          `Receita Total (R$)` = round(as.numeric(receita_liquida_mes %||% receita_total), 2)
+        ) |> dplyr::arrange(`Imóvel`, `Check-in`)
+      .aba(wb,"Reservas",df_rv,
+           col_brl=c("Diária (R$)","Receita Total (R$)"),
+           col_dat=c("Check-in","Check-out"), cor_aba="#7C3AED")
+    }
+    
+    # ── Aba Custos ───────────────────────────────────────────
+    dfs_cus <- list()
+    man <- tryCatch(d$manutencao, error = function(e) NULL)
+    rep <- tryCatch(d$reposicao,  error = function(e) NULL)
+    des <- tryCatch(d$despesas,   error = function(e) NULL)
+    if (!is.null(man) && nrow(man)>0)
+      dfs_cus[["man"]] <- man |> dplyr::transmute(
+        Tipo="Manutenção", Imóvel=as.character(imovel_nome %||% property_id %||% apto_normalizado %||% ""),
+        `Mês`=as.character(competencia),
+        Descrição=as.character(produto_servico %||% ""),
+        `Valor (R$)`=round(as.numeric(valor_total),2))
+    if (!is.null(rep) && nrow(rep)>0)
+      dfs_cus[["rep"]] <- rep |> dplyr::transmute(
+        Tipo="Reposição", Imóvel=as.character(imovel_nome %||% property_id %||% apto_normalizado %||% ""),
+        `Mês`=as.character(competencia),
+        Descrição=as.character(item_limpo %||% item_raw %||% ""),
+        `Valor (R$)`=round(as.numeric(valor_unitario_ou_total),2))
+    if (!is.null(des) && nrow(des)>0)
+      dfs_cus[["des"]] <- des |> dplyr::transmute(
+        Tipo=as.character(categoria %||% "Despesa"),
+        Imóvel=as.character(imovel_nome %||% property_id %||% apto_normalizado %||% ""),
+        `Mês`=as.character(competencia),
+        Descrição=as.character(descricao %||% ""),
+        `Valor (R$)`=round(as.numeric(valor),2))
+    if (length(dfs_cus)>0) {
+      df_cus <- dplyr::bind_rows(dfs_cus) |> dplyr::arrange(Imóvel, `Mês`, Tipo)
+      .aba(wb,"Custos",df_cus, col_brl="Valor (R$)", cor_aba="#D97706")
+    }
+    
+    openxlsx::saveWorkbook(wb, fpath, overwrite=TRUE)
+    list(path=fpath, name=fname)
+  }
+  
+  # ── Link de download via addResourcePath + link estático ─────
+  #
+  # Como funciona:
+  #   1. addResourcePath("dl_tmp", tempdir()) — mapeia /tmp para a
+  #      URL /dl_tmp/ dentro do processo Shiny. Feito uma vez na sessão.
+  #   2. .gerar_xlsx() salva o xlsx em tempdir() e retorna o nome.
+  #   3. O link <a href="/dl_tmp/ARQUIVO.xlsx"> serve o arquivo
+  #      diretamente — sem downloadHandler, sem conflito de sessão.
+  #
+  # Esta é a única abordagem que funciona quando o server é carregado
+  # via sys.source() após o login (o Shiny não aceita downloadHandler
+  # registrado fora da inicialização da sessão).
+  
+  # Registra o mapeamento uma única vez por sessão
+  addResourcePath("dl_tmp", tempdir())
+  
+  output$dl_link_wrap <- renderUI({ NULL })   # placeholder — aparece após gerar
+  
+  observeEvent(input$btn_gerar_dl, {
+    d <- dados()
+    req(d)
+    withProgress(message = "Gerando planilha...", value = 0.5, {
+      result <- tryCatch(
+        .gerar_xlsx(d),
+        error = function(e) {
+          showNotification(paste("Erro ao gerar planilha:", e$message),
+                           type = "error", duration = 6)
+          NULL
+        }
+      )
+      if (is.null(result)) return()
+      
+      # URL servida pelo Shiny via addResourcePath
+      url_dl <- paste0("dl_tmp/", result$name)
+      
+      output$dl_link_wrap <- renderUI({
+        tags$a(
+          href     = url_dl,
+          download = result$name,   # força download no browser (não abre)
+          class    = "btn-dl btn-dl-ready",
+          tags$svg(xmlns="http://www.w3.org/2000/svg", width="13", height="13",
+                   viewBox="0 0 24 24", fill="none", stroke="currentColor",
+                   `stroke-width`="2.5", `stroke-linecap`="round", `stroke-linejoin`="round",
+                   tags$polyline(points="8 17 12 21 16 17"),
+                   tags$line(x1="12", y1="12", x2="12", y2="21"),
+                   tags$path(d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29")),
+          "Clique para baixar"
+        )
+      })
+      setProgress(1)
+    })
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
 } # fim server
+
 
 
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
