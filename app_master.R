@@ -482,8 +482,8 @@ server <- function(input, output, session) {
     div(class = "sync-bar",
         div(class = dot),
         span(msg),
-        tags$button(class  = "sync-btn",
-                    onclick = "Shiny.setInputValue('btn_sync', Math.random())",
+        tags$button(type = "button", class  = "sync-btn",
+                    onclick = "Shiny.setInputValue('btn_sync', Math.random()); return false;",
                     if (rv$syncing) "Atualizando..." else "Atualizar dados"))
   })
   observeEvent(input$btn_sync, {
@@ -514,8 +514,9 @@ server <- function(input, output, session) {
     )
     div(class = "nav-tabs-master",
         lapply(abas, function(a) tags$button(
+          type    = "button",
           class   = paste("nav-tab-master", if (rv$aba == a$id) "active" else ""),
-          onclick = sprintf("Shiny.setInputValue('btn_aba','%s',{priority:'event'})", a$id),
+          onclick = sprintf("Shiny.setInputValue('btn_aba','%s',{priority:'event'}); return false;", a$id),
           a$lbl)))
   })
   
@@ -787,26 +788,34 @@ server <- function(input, output, session) {
       div(class = "sec", "OPERACIONAL"),
       
       div(class = "card",
-          # Tabs de navegação
+          # Tabs de navegação.
+          # IMPORTANTE: type="button" evita que o <button> dispare o
+          # comportamento padrão de submit/foco do navegador, que causava
+          # o scroll automático para baixo ao clicar — sem isso, o browser
+          # rola até o elemento focado após o renderUI recriar o DOM.
           div(class = "op-tabs",
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "despesas") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'despesas', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'despesas', {priority: 'event'}); return false;",
                 "💰 Despesas"
               ),
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "custos") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'custos', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'custos', {priority: 'event'}); return false;",
                 "🏠 Custos por Apartamento"
               ),
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "os") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'os', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'os', {priority: 'event'}); return false;",
                 "🔧 Ordens de Serviço"
               ),
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "reposicao") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'reposicao', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'reposicao', {priority: 'event'}); return false;",
                 "📦 Reposição"
               )
           ),
@@ -2674,9 +2683,9 @@ server <- function(input, output, session) {
           # Campo de busca sem oninput — usa debounce via JS puro, NÃO dispara renderUI
           tags$input(type = "text", id = "ger_search_input", class = "ger-search",
                      placeholder = "Imóvel ou proprietário..."),
-          tags$button("Publicar revisados", id = "ger_pub_todos_btn",
+          tags$button("Publicar revisados", id = "ger_pub_todos_btn", type = "button",
                       class = "ger-btn-pub-all",
-                      onclick = "Shiny.setInputValue('ger_pub_todos', Math.random(), {priority:'event'})")
+                      onclick = "Shiny.setInputValue('ger_pub_todos', Math.random(), {priority:'event'}); return false;")
       ),
       uiOutput("ger_kpis"),
       uiOutput("ger_cards")
@@ -2844,15 +2853,15 @@ server <- function(input, output, session) {
                   
                   # Botões
                   div(class="ger-actions",
-                      tags$button("Restaurar",
+                      tags$button("Restaurar", type = "button",
                                   class="ger-btn ger-btn-secondary",
-                                  onclick=sprintf("Shiny.setInputValue('ger_rst_%s', Math.random(), {priority:'event'})", ks)),
-                      tags$button("Salvar rascunho",
+                                  onclick=sprintf("Shiny.setInputValue('ger_rst_%s', Math.random(), {priority:'event'}); return false;", ks)),
+                      tags$button("Salvar rascunho", type = "button",
                                   class="ger-btn ger-btn-draft",
-                                  onclick=sprintf("Shiny.setInputValue('ger_save_%s', Math.random(), {priority:'event'})", ks)),
-                      tags$button(if(pub)"Republicar" else "Publicar",
+                                  onclick=sprintf("Shiny.setInputValue('ger_save_%s', Math.random(), {priority:'event'}); return false;", ks)),
+                      tags$button(if(pub)"Republicar" else "Publicar", type = "button",
                                   class="ger-btn ger-btn-pub",
-                                  onclick=sprintf("Shiny.setInputValue('ger_pub_%s', Math.random(), {priority:'event'})", ks))
+                                  onclick=sprintf("Shiny.setInputValue('ger_pub_%s', Math.random(), {priority:'event'}); return false;", ks))
                   )
               )
           )

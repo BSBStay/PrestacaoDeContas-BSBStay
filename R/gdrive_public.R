@@ -42,8 +42,13 @@ CACHE_XLSX      <- file.path(CACHE_DIR, "db_master_drive.xlsx")
 SQLITE_PATH     <- file.path(CACHE_DIR, "bsbstay.sqlite")
 CACHE_META_KEY  <- "last_drive_sync"
 
-MAX_CACHE_AGE_H <- suppressWarnings(as.numeric(Sys.getenv("MAX_CACHE_AGE_H", "6")))
-if (is.na(MAX_CACHE_AGE_H) || MAX_CACHE_AGE_H <= 0) MAX_CACHE_AGE_H <- 6
+# Reduzido de 6h para 2h: o cache de 6h fazia o painel servir dados
+# desatualizados por até 6h após uma correção na planilha fonte (ex:
+# alteração de comissão), mesmo com o ETL já tendo rodado corretamente
+# no Drive. 2h reduz a janela de inconsistência sem sobrecarregar o
+# Drive com downloads excessivos. Pode ser ajustado via env var.
+MAX_CACHE_AGE_H <- suppressWarnings(as.numeric(Sys.getenv("MAX_CACHE_AGE_H", "2")))
+if (is.na(MAX_CACHE_AGE_H) || MAX_CACHE_AGE_H <= 0) MAX_CACHE_AGE_H <- 2
 
 # ── Pacotes ───────────────────────────────────────────────────
 .ensure_pkgs <- function(pkgs) {
@@ -691,13 +696,28 @@ montar_objeto_app_sqlite <- function(con) {
   # ── 4. Reservas nível reserva ────────────────────────────────
   reservas_clean <- tryCatch({
     if (!is.null(reservas) && nrow(reservas) > 0) {
+      cols_res <- names(reservas)
       reservas |>
         dplyr::mutate(
           checkin        = parse_date_safe(checkin),
           checkout       = parse_date_safe(checkout),
           diaria_liquida = dplyr::coalesce(as.numeric(diaria_liquida), 0),
           noites_total   = dplyr::coalesce(as.numeric(noites_total), 0),
-          receita_total  = dplyr::coalesce(as.numeric(receita_liquida_mes), 0)
+          receita_total  = dplyr::coalesce(as.numeric(receita_liquida_mes), 0),
+          # Campos numéricos de detalhamento de reserva (ETL v5.1+).
+          # Tratamento seguro: se a coluna ainda não existir (meses
+          # processados antes desta versão do ETL), cria como NA em
+          # vez de quebrar a leitura.
+          adultos              = if ("adultos" %in% cols_res)
+            dplyr::coalesce(as.numeric(adultos), 0) else NA_real_,
+          criancas             = if ("criancas" %in% cols_res)
+            dplyr::coalesce(as.numeric(criancas), 0) else NA_real_,
+          valor_total_reserva  = if ("valor_total_reserva" %in% cols_res)
+            dplyr::coalesce(as.numeric(valor_total_reserva), 0) else NA_real_,
+          taxa_limpeza         = if ("taxa_limpeza" %in% cols_res)
+            dplyr::coalesce(as.numeric(taxa_limpeza), 0) else NA_real_,
+          comissao_canal       = if ("comissao_canal" %in% cols_res)
+            dplyr::coalesce(as.numeric(comissao_canal), 0) else NA_real_
         ) |>
         dplyr::filter(!is.na(checkin), !is.na(checkout), checkout > checkin) |>
         dplyr::left_join(pid_map, by = "property_id") |>

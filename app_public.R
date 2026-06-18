@@ -338,8 +338,9 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
           uiOutput("dl_link_wrap"),
           tags$button(
             id      = "btn_gerar_dl",
+            type    = "button",
             class   = "btn-dl",
-            onclick = "Shiny.setInputValue('btn_gerar_dl', Math.random(), {priority:'event'})",
+            onclick = "Shiny.setInputValue('btn_gerar_dl', Math.random(), {priority:'event'}); return false;",
             tags$svg(xmlns="http://www.w3.org/2000/svg", width="13", height="13",
                      viewBox="0 0 24 24", fill="none", stroke="currentColor",
                      `stroke-width`="2.5", `stroke-linecap`="round", `stroke-linejoin`="round",
@@ -481,8 +482,8 @@ server <- function(input, output, session) {
       paste0("\u2713 \u00daltima sincroniza\u00e7\u00e3o: ", rv$last_sync) else "\u26a0 Dados n\u00e3o sincronizados"
     div(class = "sync-bar",
         div(class = dot_class), span(msg_txt),
-        tags$button(class = "sync-btn",
-                    onclick = "Shiny.setInputValue(\'btn_sync\', Math.random())",
+        tags$button(type = "button", class = "sync-btn",
+                    onclick = "Shiny.setInputValue(\'btn_sync\', Math.random()); return false;",
                     if (rv$syncing) "\u23f3 Aguarde..." else "\u21bb Atualizar dados"))
   })
   
@@ -525,11 +526,12 @@ server <- function(input, output, session) {
     div(style = "display:flex;align-items:center;gap:10px;",
         div(class = "hdr-prop", tags$b(nome), br(), div(class = "hdr-badge", tipo)),
         tags$button(
+          type = "button",
           style = paste0("background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);",
                          "color:#c9dff2;border-radius:8px;padding:6px 12px;font-size:11px;",
                          "font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;",
                          "white-space:nowrap;transition:background .15s;"),
-          onclick = "Shiny.setInputValue('nav_alterar_senha', Math.random())",
+          onclick = "Shiny.setInputValue('nav_alterar_senha', Math.random()); return false;",
           "Alterar Senha")
     )
   })
@@ -682,23 +684,27 @@ server <- function(input, output, session) {
           # Tabs de navegação
           div(class = "op-tabs",
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "despesas") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'despesas', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'despesas', {priority: 'event'}); return false;",
                 "💰 Despesas"
               ),
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "custos") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'custos', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'custos', {priority: 'event'}); return false;",
                 "🏠 Custos por Apartamento"
               ),
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "os") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'os', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'os', {priority: 'event'}); return false;",
                 "🔧 Ordens de Serviço"
               ),
               tags$button(
+                type = "button",
                 class = paste("op-tab", if (rv$op_aba == "reposicao") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'reposicao', {priority: 'event'})",
+                onclick = "Shiny.setInputValue('btn_aba_op', 'reposicao', {priority: 'event'}); return false;",
                 "📦 Reposição"
               )
           ),
