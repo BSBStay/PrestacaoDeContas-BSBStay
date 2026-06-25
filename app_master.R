@@ -140,6 +140,52 @@ ui <- fluidPage(
         if (prop) prop.style.display = (msg.aba === 'proprietario') ? '' : 'none';
         if (cart) cart.style.display = (msg.aba === 'carteira')     ? '' : 'none';
       });
+
+      // ── TABS OPERACIONAL: gerenciadas 100% no cliente ─────────
+      // setOpTab() troca a aba ativa via JS puro, sem re-renderizar o body.
+      // Apenas o painel_operacional (renderUI proprio) e atualizado pelo server.
+      function setOpTab(aba) {
+        document.querySelectorAll('.op-tab').forEach(function(b) { b.classList.remove('active'); });
+        var btn = document.getElementById('optab-' + aba);
+        if (btn) btn.classList.add('active');
+        var sy = window.scrollY;
+        Shiny.setInputValue('btn_aba_op', aba, {priority: 'event'});
+        var restore = function(e) {
+          if (e.detail && e.detail.name === 'painel_operacional') {
+            document.removeEventListener('shiny:value', restore);
+            requestAnimationFrame(function() {
+              requestAnimationFrame(function() {
+                window.scrollTo({ top: sy, behavior: 'instant' });
+              });
+            });
+          }
+        };
+        document.addEventListener('shiny:value', restore);
+        setTimeout(function() { document.removeEventListener('shiny:value', restore); }, 3000);
+      }
+
+      // ── SCROLL GLOBAL: restaura posicao apos outros renderUIs ─
+      var _savedScrollY = null;
+      var _scrollSaveTime = 0;
+      document.addEventListener('mousedown', function(e) {
+        var el = e.target.closest('button, [onclick]');
+        if (el && !e.target.closest('.op-tab') && window.scrollY > 80) {
+          _savedScrollY = window.scrollY;
+          _scrollSaveTime = Date.now();
+        }
+      });
+      document.addEventListener('shiny:value', function(e) {
+        if (e.detail && e.detail.name === 'painel_operacional') return;
+        if (_savedScrollY !== null && (Date.now() - _scrollSaveTime) < 2000) {
+          var saved = _savedScrollY;
+          _savedScrollY = null;
+          requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+              window.scrollTo({ top: saved, behavior: 'instant' });
+            });
+          });
+        }
+      });
     ")),
     tags$style(HTML("
 /* ══ RESET ══════════════════════════════════════════════════ */
@@ -201,20 +247,20 @@ a{color:inherit;text-decoration:none;}
 .sec{font-size:10px;font-weight:800;color:#6b7280;letter-spacing:1.5px;text-transform:uppercase;margin:26px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e9ef;}
 
 /* ══ KPI CARDS ══════════════════════════════════════════════ */
-.kgrid{display:grid;grid-template-columns:1.6fr repeat(5,1fr);gap:14px;margin-bottom:6px;align-items:stretch;}
-@media(max-width:1200px){.kgrid{grid-template-columns:repeat(3,1fr);}}
-@media(max-width:600px){.kgrid{grid-template-columns:repeat(2,1fr);}}
-.kcard{background:#fff;border-radius:12px;padding:18px 20px;border:1px solid #e5e9ef;box-shadow:0 1px 4px rgba(0,0,0,.04);transition:box-shadow .15s;}
+.kgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:6px;align-items:stretch;}
+@media(max-width:1300px){.kgrid{grid-template-columns:repeat(4,1fr);}}
+@media(max-width:700px){.kgrid{grid-template-columns:repeat(2,1fr);}}
+.kcard{background:#fff;border-radius:12px;padding:18px 20px;border:1px solid #e5e9ef;box-shadow:0 1px 4px rgba(0,0,0,.04);transition:box-shadow .15s;height:100%;}
 .kcard:hover{box-shadow:0 3px 12px rgba(0,0,0,.08);}
 .kcard.hero{background:linear-gradient(145deg,#0a1e36 0%,#0f2d4a 100%);border:none;
-  box-shadow:0 8px 32px rgba(0,30,60,.28);padding:22px 24px;}
+  box-shadow:0 8px 32px rgba(0,30,60,.28);}
 .kcard.hero .klbl{color:rgba(255,255,255,.55);letter-spacing:1.2px;}
-.kcard.hero .kval{color:#ffffff;font-size:30px;}
+.kcard.hero .kval{color:#ffffff;font-size:22px;}
 .kcard.hero .kval.g{color:#34d99e;}
 .kcard.hero .kdelta{color:rgba(255,255,255,.45);}
 .kcard.hero .kdelta.up{color:#34d99e;}
 .klbl{font-size:10px;font-weight:700;color:#6b7280;letter-spacing:.9px;text-transform:uppercase;margin-bottom:7px;}
-.kval{font-size:24px;font-weight:800;color:#0f1c2e;line-height:1.1;}
+.kval{font-size:20px;font-weight:800;color:#0f1c2e;line-height:1.1;}
 .kval.g{color:#00b388;}
 .kdelta{font-size:11px;margin-top:6px;font-weight:600;}
 .kdelta.up{color:#00b388;} .kdelta.dn{color:#e03e3e;}
@@ -223,9 +269,13 @@ a{color:inherit;text-decoration:none;}
 .kgrid-sm{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px;}
 @media(max-width:1100px){.kgrid-sm{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:600px){.kgrid-sm{grid-template-columns:repeat(2,1fr);}}
-.kcard-sm{background:#fff;border-radius:10px;padding:14px 16px;border:1px solid #e5e9ef;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.ksm-lbl{font-size:9px;font-weight:700;color:#9aa5b4;letter-spacing:.9px;text-transform:uppercase;margin-bottom:5px;}
-.ksm-val{font-size:20px;font-weight:800;line-height:1.1;}
+.kgrid-sm.kgrid-sm-2{grid-template-columns:repeat(2,1fr);}
+.kgrid-sm.kgrid-sm-3{grid-template-columns:repeat(3,1fr);}
+.kgrid-sm.kgrid-sm-4{grid-template-columns:repeat(4,1fr);}
+@media(max-width:700px){.kgrid-sm.kgrid-sm-3,.kgrid-sm.kgrid-sm-4{grid-template-columns:repeat(2,1fr);}}
+.kcard-sm{background:#fff;border-radius:10px;padding:16px 20px;border:1px solid #e5e9ef;box-shadow:0 1px 3px rgba(0,0,0,.04);height:100%;}
+.ksm-lbl{font-size:9px;font-weight:700;color:#9aa5b4;letter-spacing:.9px;text-transform:uppercase;margin-bottom:6px;}
+.ksm-val{font-size:24px;font-weight:800;line-height:1.1;}
 
 /* ══ CARDS ══════════════════════════════════════════════════ */
 .card{background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e9ef;box-shadow:0 1px 5px rgba(0,0,0,.04);}
@@ -696,7 +746,9 @@ server <- function(input, output, session) {
           kcard("RevPAR",
                 brl(if (!is.na(m$revpar)) m$revpar else 0),
                 paste0(m$n_imoveis, " imóvel(is) no filtro"), icon = "📈"),
-          kcard("Taxa Adm.",      brl(m$taxa_adm),       "20% da receita",   dn = TRUE),
+          kcard("Taxa Adm.",      brl(m$taxa_adm),
+                paste0(round(if (m$receita_bruta > 0) m$taxa_adm / m$receita_bruta * 100 else 0, 1),
+                       "% da receita"), dn = TRUE),
           kcard("Outros Custos",  brl(m$outros_custos),  "fixa + variável",  dn = TRUE),
           kcard("Ocupação",       paste0(round(m$ocupacao), "%"),
                 paste0("Diária média: ", brl(m$diaria_media)))
@@ -738,24 +790,17 @@ server <- function(input, output, session) {
       # ════════════════════════════════════════
       uiOutput("sec_detalhamento_mes"),
       
-      # Resultado + Custos + Ranking
-      div(class = "cgrid",
-          div(class = "card",
+      # Resultado + Custos (Ranking movido para Visão Geral)
+      div(class = "card",
+          div(class = "card-hdr",
+              div(class = "card-ttl", "Resultado Financeiro"),
+              span(class = "badge", "Após deduções")),
+          uiOutput("resultado"),
+          div(style = "margin-top:16px;",
               div(class = "card-hdr",
-                  div(class = "card-ttl", "Resultado Financeiro"),
-                  span(class = "badge", "Após deduções")),
-              uiOutput("resultado"),
-              div(style = "margin-top:16px;",
-                  div(class = "card-hdr",
-                      div(class = "card-ttl", "Custos do Mês"),
-                      span(class = "badge", "Discriminado")),
-                  shinycssloaders::withSpinner(DTOutput("t_custos"), type = 4, color = "#00c49a"))
-          ),
-          div(class = "card",
-              div(class = "card-hdr",
-                  div(class = "card-ttl", "Ranking de Imóveis"),
-                  span(class = "badge", "Receita no mês")),
-              uiOutput("ranking"))
+                  div(class = "card-ttl", "Custos do Mês"),
+                  span(class = "badge", "Discriminado")),
+              shinycssloaders::withSpinner(DTOutput("t_custos"), type = 4, color = "#00c49a"))
       ),
       
       # ════════════════════════════════════════
@@ -790,65 +835,43 @@ server <- function(input, output, session) {
       div(class = "card",
           # Tabs de navegação.
           # IMPORTANTE: type="button" evita que o <button> dispare o
-          # comportamento padrão de submit/foco do navegador, que causava
-          # o scroll automático para baixo ao clicar — sem isso, o browser
-          # rola até o elemento focado após o renderUI recriar o DOM.
-          div(class = "op-tabs",
-              tags$button(
-                type = "button",
-                class = paste("op-tab", if (rv$op_aba == "despesas") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'despesas', {priority: 'event'}); return false;",
-                "💰 Despesas"
-              ),
-              tags$button(
-                type = "button",
-                class = paste("op-tab", if (rv$op_aba == "custos") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'custos', {priority: 'event'}); return false;",
-                "🏠 Custos por Apartamento"
-              ),
-              tags$button(
-                type = "button",
-                class = paste("op-tab", if (rv$op_aba == "os") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'os', {priority: 'event'}); return false;",
-                "🔧 Ordens de Serviço"
-              ),
-              tags$button(
-                type = "button",
-                class = paste("op-tab", if (rv$op_aba == "reposicao") "active" else ""),
-                onclick = "Shiny.setInputValue('btn_aba_op', 'reposicao', {priority: 'event'}); return false;",
-                "📦 Reposição"
-              )
+          div(class = "op-tabs", id = "op-tabs-wrap",
+              tags$button(type="button", id="optab-despesas",   class="op-tab active", onclick="setOpTab('despesas')",   "💰 Despesas"),
+              tags$button(type="button", id="optab-custos",     class="op-tab",        onclick="setOpTab('custos')",     "🏠 Contas do Apartamento"),
+              tags$button(type="button", id="optab-os",         class="op-tab",        onclick="setOpTab('os')",         "🔧 Manutenções"),
+              tags$button(type="button", id="optab-reposicao",  class="op-tab",        onclick="setOpTab('reposicao')",  "📦 Reposição")
           ),
           uiOutput("painel_operacional")
       ),
       
       # ════════════════════════════════════════
-      # 7. ANÁLISE TEMPORAL
       # ════════════════════════════════════════
-      div(class = "sec", "ANÁLISE TEMPORAL"),
+      # 7. VISÃO GERAL + HISTÓRICO (OP-12: ANÁLISE TEMPORAL removida)
+      # ════════════════════════════════════════
+      div(class = "sec", "VISÃO GERAL DA CARTEIRA"),
+      # Ranking integrado na Visão Geral
+      div(class = "card", style = "margin-bottom:14px;",
+          div(class = "card-hdr",
+              div(class = "card-ttl", "Ranking de Imóveis"),
+              span(class = "badge", "Resultado do mês")),
+          uiOutput("ranking")),
       div(class = "cgrid",
-          div(class = "card",
-              div(class = "card-hdr",
-                  div(class = "card-ttl", "Diárias por Dia"),
-                  span(class = "badge", "Valores realizados")),
-              shinycssloaders::withSpinner(plotlyOutput("g_diarias", height = "200px"), type = 4, color = "#00c49a")
-          ),
           div(class = "card",
               div(class = "card-hdr",
                   div(class = "card-ttl", "Evolução 12 Meses"),
                   span(class = "badge", "Receita + Resultado")),
-              shinycssloaders::withSpinner(plotlyOutput("g_evolucao", height = "200px"), type = 4, color = "#00c49a")
-          )
+              shinycssloaders::withSpinner(plotlyOutput("g_evolucao", height = "220px"), type = 4, color = "#00c49a")
+          ),
+          div(class = "card",
+              div(class = "card-hdr",
+                  div(class = "card-ttl", "Acumulado dos Últimos 12 Meses"),
+                  span(class = "badge", "Base consolidada")),
+              uiOutput("acumulado"))
       ),
       
-      # ════════════════════════════════════════
-      # 8. VISÃO GERAL + HISTÓRICO
-      # ════════════════════════════════════════
-      div(class = "sec", "VISÃO GERAL DA CARTEIRA"),
-      div(class = "card",
-          div(class = "card-hdr", div(class = "card-ttl", "Acumulado do Ano"),
-              span(class = "badge", "Acumulado até o período")),
-          uiOutput("acumulado")),
+      # OP-14: Portfólio de Imóveis incluído na VISÃO GERAL
+      div(class = "sec-sub", "PORTFÓLIO DE IMÓVEIS"),
+      shinycssloaders::withSpinner(uiOutput("portfolio_cards"), type = 4, color = "#1a6ef7"),
       
       div(class = "sec", "HISTÓRICO DETALHADO"),
       div(class = "card",
@@ -1024,13 +1047,10 @@ server <- function(input, output, session) {
     n_int    <- nrow(df)                       # nº de intervalos/reservas
     ticket   <- mean(df$receita_total, na.rm = TRUE)  # ticket médio por reserva
     
-    div(class = "kgrid-sm",
+    div(class = "kgrid-sm kgrid-sm-3",
         kcard_sm("Diária Média",      brl(d_media), "blue"),
         kcard_sm("Maior Diária",      brl(d_max),   "green"),
-        kcard_sm("Menor Diária",      brl(d_min),   "orange"),
-        kcard_sm("Variação no Mês",   d_var,         "purple"),
-        kcard_sm("Ticket Médio/Res.", brl(ticket),  "blue"),
-        kcard_sm("Nº de Intervalos",  as.character(n_int), "orange")
+        kcard_sm("Menor Diária",      brl(d_min),   "orange")
     )
   })
   
@@ -1137,42 +1157,33 @@ server <- function(input, output, session) {
       tagList(
         # KPIs de despesas
         shinycssloaders::withSpinner(uiOutput("kpis_despesas"), type = 4, color = "#d97706"),
-        # Gráfico por categoria + tabela
-        div(class = "cgrid",
-            div(class = "card",
-                div(class = "card-hdr",
-                    div(class = "card-ttl", "Despesas por Categoria"),
-                    span(class = "badge badge-orange", "Distribuição")),
-                shinycssloaders::withSpinner(
-                  plotlyOutput("g_despesas_cat", height = "240px"), type = 4, color = "#d97706")
-            ),
-            div(class = "card",
-                div(class = "card-hdr",
-                    div(class = "card-ttl", "Despesas por Apartamento"),
-                    span(class = "badge badge-orange", "Comparativo")),
-                shinycssloaders::withSpinner(
-                  plotlyOutput("g_despesas_apto", height = "240px"), type = 4, color = "#d97706")
-            )
+        div(class = "card",
+            div(class = "card-hdr",
+                div(class = "card-ttl", "Despesas por Categoria"),
+                span(class = "badge badge-orange", "Distribuição")),
+            shinycssloaders::withSpinner(
+              plotlyOutput("g_despesas_cat", height = "260px"), type = 4, color = "#d97706")
         ),
         div(class = "card", style = "margin-top:14px;",
             div(class = "card-hdr",
                 div(class = "card-ttl", "Tabela de Despesas"),
-                span(class = "badge badge-orange", "Detalhada")),
+                span(class = "badge badge-orange", "Inclui Manutenção e Reposição")),
             div(class = "tab-wrap",
                 shinycssloaders::withSpinner(DTOutput("t_despesas"), type = 4, color = "#d97706"))
         )
       )
       
     } else if (aba == "custos") {
-      # ── ABA: Custos por Apartamento ────────────────────────
+      # ── ABA: Contas do Apartamento (OP-7/OP-9) ─────────────
       tagList(
         shinycssloaders::withSpinner(uiOutput("kpis_custos"), type = 4, color = "#7c3aed"),
+        # OP-9: Tabela de Contas substitui o gráfico de evolução
         div(class = "card", style = "margin-top:0;",
             div(class = "card-hdr",
-                div(class = "card-ttl", "Evolução de Custos por Apartamento"),
-                span(class = "badge badge-purple", "Histórico")),
-            shinycssloaders::withSpinner(
-              plotlyOutput("g_custos_apto", height = "260px"), type = 4, color = "#7c3aed")
+                div(class = "card-ttl", "Tabela de Contas"),
+                span(class = "badge badge-purple", "Mês selecionado")),
+            div(class = "tab-wrap",
+                shinycssloaders::withSpinner(DTOutput("t_contas_apto"), type = 4, color = "#7c3aed"))
         ),
         div(class = "card", style = "margin-top:14px;",
             div(class = "card-hdr",
@@ -1196,12 +1207,12 @@ server <- function(input, output, session) {
         )
       )
     } else {
-      # ── ABA: Ordens de Serviço ────────────────────────────
+      # ── ABA: Manutenções (OP-10) ───────────────────────────
       tagList(
         shinycssloaders::withSpinner(uiOutput("kpis_os"), type = 4, color = "#0052cc"),
         div(class = "card", style = "margin-top:0;",
             div(class = "card-hdr",
-                div(class = "card-ttl", "Ordens de Serviço"),
+                div(class = "card-ttl", "Manutenções"),
                 span(class = "badge badge-blue", "Mês selecionado")),
             div(class = "tab-wrap",
                 shinycssloaders::withSpinner(DTOutput("t_os"), type = 4, color = "#0052cc"))
@@ -1223,35 +1234,58 @@ server <- function(input, output, session) {
       if (nrow(tc) > 0) tc$categoria[1] else "—"
     } else "—"
     
+    # OP-2: calcular total manutenção para os KPIs
+    total_man_des <- {
+      man_d <- manutencao_fil()
+      if (nrow(man_d) > 0) sum(man_d$valor_total, na.rm=TRUE) else 0
+    }
+    
     div(class = "kgrid-sm",
-        kcard_sm("Total Despesas",  brl(total_des),   "orange"),
-        kcard_sm("Total Reposição", brl(total_rep),   "purple"),
-        kcard_sm("Nº Categorias",   as.character(n_cat), "orange"),
-        kcard_sm("Aptos Afetados",  as.character(n_apto), "blue"),
-        kcard_sm("Maior Categoria", maior_cat,         "red"),
-        kcard_sm("Total Operac.",   brl(total_des + total_rep), "green")
+        kcard_sm("Total Contas Imóvel", brl(total_des),               "orange"),  # OP-3
+        kcard_sm("Total Reposição",     brl(total_rep),               "purple"),
+        kcard_sm("Total Manutenção",    brl(total_man_des),           "blue"),     # OP-2
+        kcard_sm("Maior Categoria",     maior_cat,                     "red"),
+        kcard_sm("Total de Despesas",   brl(total_des + total_rep + total_man_des), "green") # OP-4
     )
   })
   
   # ── Gráfico despesas por categoria (pizza) ───────────────────
   output$g_despesas_cat <- renderPlotly({
     des <- despesas_fil()
-    validate(need(nrow(des) > 0 && "categoria" %in% names(des), "Sem dados de despesas."))
-    df <- des |>
+    man <- manutencao_fil()
+    rep <- reposicao_fil()
+    
+    # OP-5: unificar despesas + manutenção + reposição por categoria
+    df_des <- if (nrow(des) > 0 && "categoria" %in% names(des))
+      des |> dplyr::transmute(categoria, valor)
+    else data.frame(categoria=character(), valor=numeric())
+    
+    df_man <- if (nrow(man) > 0)
+      data.frame(categoria="Manutenção (OS)", valor=man$valor_total)
+    else data.frame(categoria=character(), valor=numeric())
+    
+    df_rep <- if (nrow(rep) > 0)
+      data.frame(categoria="Reposição", valor=suppressWarnings(as.numeric(rep$valor_unitario_ou_total)))
+    else data.frame(categoria=character(), valor=numeric())
+    
+    df_all <- dplyr::bind_rows(df_des, df_man, df_rep)
+    validate(need(nrow(df_all) > 0, "Sem dados de despesas/custos."))
+    df <- df_all |>
       dplyr::group_by(categoria) |>
-      dplyr::summarise(total = sum(valor, na.rm = TRUE), .groups = "drop") |>
+      dplyr::summarise(total = sum(valor, na.rm=TRUE), .groups="drop") |>
       dplyr::arrange(dplyr::desc(total))
-    cores <- c("#0052cc","#2684ff","#d97706","#7c3aed","#e03e3e","#00b388","#f59e0b","#9ca3af")
-    plot_ly(df, labels = ~categoria, values = ~total, type = "pie",
-            marker = list(colors = cores, line = list(color = "#fff", width = 2)),
-            textinfo = "percent", textposition = "inside",
-            hovertemplate = "%{label}<br>R$ %{value:,.0f}<extra></extra>") |>
+    
+    cores <- c("#0052cc","#2684ff","#d97706","#7c3aed","#e03e3e","#00b388","#f59e0b","#9ca3af","#0891b2","#34d399")
+    plot_ly(df, labels=~categoria, values=~total, type="pie",
+            marker=list(colors=cores, line=list(color="#fff", width=2)),
+            textinfo="percent", textposition="inside",
+            hovertemplate="%{label}<br>R$ %{value:,.0f}<extra></extra>") |>
       layout(paper_bgcolor="transparent", plot_bgcolor="transparent",
              showlegend=TRUE,
              legend=list(font=list(size=10), orientation="v", x=1.02, y=0.5),
              margin=list(l=0,r=120,t=10,b=10),
              autosize=TRUE) |>
-      config(displayModeBar = FALSE)
+      config(displayModeBar=FALSE)
   })
   
   # ── Gráfico despesas por apartamento (barras) ─────────────────
@@ -1277,45 +1311,66 @@ server <- function(input, output, session) {
   # ── Tabela despesas ───────────────────────────────────────────
   output$t_despesas <- renderDT({
     des <- despesas_fil()
-    validate(need(nrow(des) > 0, "Sem despesas para o período/imóvel selecionado."))
+    man <- manutencao_fil()
+    rep <- reposicao_fil()
     
-    # Colunas disponíveis com fallback
-    cols_base <- c("imovel_nome", "categoria", "descricao", "data", "competencia", "valor")
-    cols_ok   <- cols_base[cols_base %in% names(des)]
-    df <- des |>
-      dplyr::select(dplyr::all_of(cols_ok)) |>
-      dplyr::rename_with(~ dplyr::recode(.,
-                                         imovel_nome = "Imóvel", categoria = "Categoria", descricao = "Descrição",
-                                         data = "Data", competencia = "Competência", valor = "Valor (R$)")) |>
-      dplyr::mutate(dplyr::across(dplyr::any_of("Valor (R$)"), ~ brl(.x)))
+    # OP-6: unificar despesas + manutenção + reposição em uma única tabela
+    df_des <- if (nrow(des) > 0) {
+      des |> dplyr::transmute(
+        `Imóvel`      = dplyr::coalesce(as.character(imovel_nome), "—"),
+        `Categoria`   = dplyr::coalesce(as.character(categoria), "Despesa"),
+        `Descrição`   = if ("descricao" %in% names(des)) as.character(descricao) else "—",
+        `Data`        = if ("data"       %in% names(des)) as.character(data)       else "—",
+        `Competência` = as.character(competencia),
+        `Valor (R$)`  = brl(valor)
+      )
+    } else data.frame()
+    
+    df_man <- if (nrow(man) > 0) {
+      man |> dplyr::transmute(
+        `Imóvel`      = dplyr::coalesce(as.character(imovel_nome), as.character(property_id), "—"),
+        `Categoria`   = "Manutenção (OS)",
+        `Descrição`   = if ("produto_servico" %in% names(man)) as.character(produto_servico) else "—",
+        `Data`        = if ("data"            %in% names(man)) as.character(data)            else "—",
+        `Competência` = as.character(competencia),
+        `Valor (R$)`  = brl(valor_total)
+      )
+    } else data.frame()
+    
+    df_rep <- if (nrow(rep) > 0) {
+      item_col <- if ("item_limpo" %in% names(rep)) rep$item_limpo
+      else if ("item_raw" %in% names(rep)) rep$item_raw else rep(NA_character_, nrow(rep))
+      rep |> dplyr::transmute(
+        `Imóvel`      = dplyr::coalesce(as.character(imovel_nome %||% property_id), "—"),
+        `Categoria`   = "Reposição",
+        `Descrição`   = dplyr::coalesce(as.character(item_col), "—"),
+        `Data`        = "—",
+        `Competência` = as.character(competencia),
+        `Valor (R$)`  = brl(suppressWarnings(as.numeric(valor_unitario_ou_total)))
+      )
+    } else data.frame()
+    
+    df <- dplyr::bind_rows(df_des, df_man, df_rep)
+    validate(need(nrow(df) > 0, "Sem despesas/custos para o período/imóvel selecionado."))
     
     datatable(df,
-              options = list(pageLength = 10, dom = "ftip",
-                             language = list(search = "Buscar:", paginate = list(previous="Ant.", `next`="Próx."))),
-              rownames = FALSE, class = "compact stripe hover",
-              escape = FALSE)
-  }, server = FALSE)
+              options = list(pageLength=10, dom="ftip",
+                             language=list(search="Buscar:", paginate=list(previous="Ant.", `next`="Próx."))),
+              rownames=FALSE, class="compact stripe hover", escape=FALSE)
+  }, server=FALSE)
   
   # ── KPIs Custos por Apartamento ──────────────────────────────
   output$kpis_custos <- renderUI({
     d <- dados(); req(d, input$mes_sel)
     rec <- rec_fil() |> dplyr::filter(competencia == input$mes_sel)
     if (nrow(rec) == 0) return(p(class="sem-dados","Sem dados."))
-    
     total_custo <- sum(rec$outros_custos, na.rm = TRUE)
-    apto_maior  <- rec |> dplyr::arrange(dplyr::desc(outros_custos)) |> dplyr::slice(1)
     n_apto      <- length(unique(rec$imovel))
-    custo_med   <- mean(rec$outros_custos, na.rm = TRUE)
-    custo_r_rec <- if (sum(rec$receita_bruta,na.rm=TRUE) > 0)
-      paste0(round(total_custo/sum(rec$receita_bruta,na.rm=TRUE)*100), "%") else "—"
-    
-    div(class = "kgrid-sm",
-        kcard_sm("Total Custos",       brl(total_custo),          "purple"),
-        kcard_sm("Custo/Apto Médio",   brl(custo_med),            "blue"),
-        kcard_sm("Aptos com Custo",    as.character(n_apto),      "orange"),
-        kcard_sm("Custo/Receita",      custo_r_rec,               "red"),
-        kcard_sm("Apto c/ + Custo",    as.character(apto_maior$imovel[1] %||% "—"), "purple"),
-        kcard_sm("Custo Maior Apto",   brl(apto_maior$outros_custos[1]), "red")
+    custo_med   <- if (n_apto > 0) round(total_custo / n_apto, 2) else 0
+    div(class = "kgrid-sm kgrid-sm-3",
+        kcard_sm("Total Contas",     brl(total_custo),     "purple"),
+        kcard_sm("Custo/Apto Médio", brl(custo_med),       "blue"),
+        kcard_sm("Aptos com Custo",  as.character(n_apto), "orange")
     )
   })
   
@@ -1356,6 +1411,27 @@ server <- function(input, output, session) {
       config(displayModeBar = FALSE)
   })
   
+  # ── Tabela de Contas (OP-9) — substitui gráfico Evolução de Custos ──────────
+  output$t_contas_apto <- renderDT({
+    des <- despesas_fil()
+    if (nrow(des) == 0)
+      return(datatable(data.frame(Mensagem="Sem contas para o período/imóvel selecionado."),
+                       options=list(dom="t"), rownames=FALSE))
+    cols_ok <- names(des)
+    df <- des |> dplyr::transmute(
+      `Imóvel`      = dplyr::coalesce(as.character(imovel_nome), "—"),
+      `Categoria`   = dplyr::coalesce(as.character(categoria),   "—"),
+      `Descrição`   = if ("descricao"   %in% cols_ok) as.character(descricao)   else "—",
+      `Data`        = if ("data"        %in% cols_ok) as.character(data)        else "—",
+      `Competência` = as.character(competencia),
+      `Valor (R$)`  = brl(valor)
+    )
+    datatable(df,
+              options=list(pageLength=15, dom="ftip",
+                           language=list(search="Buscar:", paginate=list(previous="Ant.", `next`="Próx."))),
+              rownames=FALSE, class="compact stripe hover")
+  }, server=FALSE)
+  
   # ── Tabela custos por apartamento ────────────────────────────
   output$t_custos_apto <- renderDT({
     d <- dados(); req(d, input$mes_sel)
@@ -1382,7 +1458,7 @@ server <- function(input, output, session) {
                   backgroundPosition = "center")
   }, server = FALSE)
   
-  # ── KPIs Ordens de Serviço ────────────────────────────────────
+  # ── KPIs Manutenções ──────────────────────────────────────────
   output$kpis_os <- renderUI({
     man <- manutencao_fil()
     if (nrow(man) == 0) return(p(class="sem-dados","Sem ordens de serviço no período."))
@@ -1398,17 +1474,13 @@ server <- function(input, output, session) {
     } else "—"
     n_pend <- if ("status" %in% names(man)) sum(grepl("pendente", tolower(man$status)), na.rm=TRUE) else 0
     
-    div(class = "kgrid-sm",
-        kcard_sm("Nº de OS",       as.character(n_os),   "blue"),
-        kcard_sm("Custo Total OS", brl(total_val),        "red"),
-        kcard_sm("Custo Médio/OS", brl(val_med),          "orange"),
-        kcard_sm("Aptos Afetados", as.character(n_apto),  "blue"),
-        kcard_sm("OS Pendentes",   as.character(n_pend),  "red"),
-        kcard_sm("Tipo Mais Freq.", tipo_freq,             "purple")
+    div(class = "kgrid-sm kgrid-sm-2",
+        kcard_sm("Qtde de OS",     as.character(n_os), "blue"),
+        kcard_sm("Custo Total OS", brl(total_val),      "red")
     )
   })
   
-  # ── Tabela Ordens de Serviço ──────────────────────────────────
+  # ── Tabela Manutenções ────────────────────────────────────────
   output$t_os <- renderDT({
     man <- manutencao_fil()
     validate(need(nrow(man) > 0, "Sem ordens de serviço para o período/imóvel selecionado."))
@@ -1418,12 +1490,8 @@ server <- function(input, output, session) {
       dplyr::transmute(
         `OS ID`           = if ("os_id"          %in% names(man)) as.character(os_id) else "—",
         `Imóvel`          = dplyr::coalesce(as.character(imovel_nome %||% property_id), "—"),
-        `Competência`     = as.character(competencia),
         `Data`            = if ("data" %in% names(man)) as.character(data) else as.character(competencia),
-        `Tipo Serviço`    = if ("tipo_servico"    %in% names(man)) as.character(tipo_servico) else "—",
         `Produto/Serviço` = if ("produto_servico" %in% names(man)) as.character(produto_servico) else "—",
-        `Descrição`       = if ("descricao"       %in% names(man)) as.character(descricao) else "—",
-        `Prestador`       = if ("prestador"       %in% names(man)) as.character(prestador) else "—",
         `Status`          = if ("status"          %in% names(man)) as.character(status) else "Concluída",
         `Valor (R$)`      = brl(valor_total)
       )
@@ -1463,13 +1531,10 @@ server <- function(input, output, session) {
     } else "—"
     ticket_med <- if (n_itens > 0) total_val / n_itens else 0
     
-    div(class = "kgrid-sm",
-        kcard_sm("Total Reposição",   brl(total_val),               "teal"),
-        kcard_sm("Qtd. Total",        as.character(round(total_qtd)), "blue"),
-        kcard_sm("Nº de Itens",       as.character(n_itens),        "purple"),
-        kcard_sm("Aptos Afetados",    as.character(n_aptos),        "orange"),
-        kcard_sm("Item Mais Reposto", item_freq,                    "red"),
-        kcard_sm("Ticket Médio/Item", brl(ticket_med),              "teal"))
+    div(class = "kgrid-sm kgrid-sm-2",
+        kcard_sm("Total Reposição", brl(total_val),        "teal"),
+        kcard_sm("Nº de Itens",     as.character(n_itens), "purple")
+    )
   })
   
   # ── Tabela Reposição ──────────────────────────────────────────
@@ -1566,13 +1631,14 @@ server <- function(input, output, session) {
   # ═══════════════════════════════════════════════════════════
   output$ranking <- renderUI({
     d <- dados(); req(d, input$mes_sel)
+    # OP-13: rankear por resultado_liq (não por receita_bruta)
     rank_df <- d$receitas |>
       dplyr::filter(competencia == input$mes_sel) |>
       dplyr::group_by(imovel) |>
-      dplyr::summarise(receita = sum(receita_bruta, na.rm=TRUE), .groups="drop") |>
-      dplyr::arrange(dplyr::desc(receita))
+      dplyr::summarise(resultado = sum(resultado_liq, na.rm=TRUE), .groups="drop") |>
+      dplyr::arrange(dplyr::desc(resultado))
     if (nrow(rank_df) == 0) return(p(class="sem-dados","Sem dados."))
-    mx  <- max(rank_df$receita, 1)
+    mx  <- max(abs(rank_df$resultado), 1)
     cls <- c("b1","b2","b3","b4")
     items <- lapply(seq_len(nrow(rank_df)), function(i) {
       r <- rank_df[i,]
@@ -1580,8 +1646,8 @@ server <- function(input, output, session) {
           div(class="rn", i),
           div(class="rname", r$imovel),
           div(class="rbw", div(class=paste("rb",cls[min(i,4)]),
-                               style=paste0("width:",round(r$receita/mx*100),"%;"))),
-          div(class="rval", brl(r$receita)))
+                               style=paste0("width:",round(abs(r$resultado)/mx*100),"%"))),
+          div(class="rval", brl(r$resultado)))
     })
     div(!!!items)
   })
@@ -1589,84 +1655,61 @@ server <- function(input, output, session) {
   # ═══════════════════════════════════════════════════════════
   # OUTPUT: Acumulado
   # ═══════════════════════════════════════════════════════════
+  # PUB-10: Acumulado dos Últimos 12 Meses — sem gráfico
   output$acumulado <- renderUI({
-    acum <- rec_fil() |>
-      dplyr::summarise(rec=sum(receita_bruta,na.rm=TRUE), res=sum(resultado_liq,na.rm=TRUE))
-    div(
-      div(class="acg",
-          div(div(class="al","RECEITA ACUMULADA"), div(class="av",brl(acum$rec)), div(class="ad","▲ base consolidada")),
-          div(div(class="al","RESULTADO ACUMULADO"), div(class="av g",brl(acum$res)), div(class="ad","▲ base consolidada"))
-      ),
-      shinycssloaders::withSpinner(plotlyOutput("g_acum",height="90px"),type=4,color="#00c49a")
+    df_base <- rec_fil()
+    if (nrow(df_base) == 0) return(p(class="sem-dados","Sem dados."))
+    mes_max <- max(df_base$mes, na.rm=TRUE)
+    mes_ini <- mes_max %m-% months(11)
+    df_12   <- df_base |> dplyr::filter(mes >= mes_ini)
+    acum    <- df_12 |> dplyr::summarise(
+      rec = sum(receita_bruta, na.rm=TRUE),
+      res = sum(resultado_liq, na.rm=TRUE)
+    )
+    div(class="acg",
+        div(div(class="al","RECEITA ACUMULADA"),
+            div(class="av", brl(acum$rec)),
+            div(class="ad","\u25b2 últimos 12 meses")),
+        div(div(class="al","RESULTADO ACUMULADO"),
+            div(class="av g", brl(acum$res)),
+            div(class="ad","\u25b2 últimos 12 meses"))
     )
   })
-  output$g_acum <- renderPlotly({
-    df <- rec_fil() |>
-      dplyr::group_by(mes) |>
-      dplyr::summarise(rec=sum(receita_bruta,na.rm=TRUE),.groups="drop") |>
-      dplyr::arrange(mes) |>
-      dplyr::mutate(acum=cumsum(rec))
-    validate(need(nrow(df)>0,""))
-    plot_ly(df,x=~mes,y=~acum,type="scatter",mode="lines",fill="tozeroy",
-            line=list(color="#00b388",width=2),fillcolor="rgba(0,179,136,0.12)",
-            hovertemplate="%{x|%b/%Y}<br>Acum: R$ %{y:,.0f}<extra></extra>") |>
-      layout(paper_bgcolor="transparent",plot_bgcolor="transparent",
-             xaxis=list(showgrid=F,zeroline=F,showticklabels=F,title=""),
-             yaxis=list(showgrid=F,zeroline=F,showticklabels=F,title=""),
-             margin=list(l=0,r=0,t=0,b=0),showlegend=FALSE) |>
-      config(displayModeBar=FALSE)
-  })
+  # g_acum stub — referência removida do layout mas mantida para evitar erros
+  output$g_acum <- renderPlotly({ plotly_empty() |> config(displayModeBar=FALSE) })
+  
+  # OP-12: g_diarias stub — ANÁLISE TEMPORAL removida do layout
+  output$g_diarias <- renderPlotly({ plotly_empty() |> config(displayModeBar=FALSE) })
   
   # ═══════════════════════════════════════════════════════════
-  # OUTPUT: Gráfico Diárias por dia (análise temporal)
-  # ═══════════════════════════════════════════════════════════
-  output$g_diarias <- renderPlotly({
-    d <- dados(); req(d, input$mes_sel)
-    iid <- if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
-      input$imovel else if (length(d$imoveis_ids)>0) d$imoveis_ids[[1]] else return(NULL)
-    cal <- d$calendario
-    if (is.null(cal) || nrow(cal)==0) validate(need(FALSE,"Sem dados."))
-    cal <- cal |>
-      dplyr::filter(apto_original==iid,format(as.Date(data),"%Y-%m")==input$mes_sel) |>
-      dplyr::arrange(data)
-    validate(need(nrow(cal)>0,"Sem dados para o período."))
-    plot_ly(cal,x=~as.Date(data),y=~valor,type="scatter",mode="lines+markers",
-            line=list(color="#1a6ef7",width=2),marker=list(color=ifelse(cal$ocupado,"#1a6ef7","#d1d9e0"),size=6),
-            hovertemplate="Dia %{x|%d/%m}<br>R$ %{y:,.0f}<extra></extra>") |>
-      layout(paper_bgcolor="transparent",plot_bgcolor="transparent",
-             xaxis=list(showgrid=F,zeroline=F,tickformat="%d/%m",tickfont=list(size=10),title=""),
-             yaxis=list(showgrid=T,gridcolor="#f0f4f8",zeroline=F,tickprefix="R$ ",tickfont=list(size=10),title=""),
-             margin=list(l=52,r=10,t=8,b=30),showlegend=FALSE) |>
-      config(displayModeBar=FALSE)
-  })
-  
-  # ═══════════════════════════════════════════════════════════
-  # OUTPUT: Gráfico Evolução 6 Meses
+  # OUTPUT: Evolução 12 Meses — PUB-9: resultado em barras, receita em linha
   # ═══════════════════════════════════════════════════════════
   output$g_evolucao <- renderPlotly({
     df <- rec_fil() |>
       dplyr::group_by(mes, mes_label) |>
       dplyr::summarise(receita=sum(receita_bruta,na.rm=TRUE),resultado=sum(resultado_liq,na.rm=TRUE),.groups="drop") |>
-      dplyr::arrange(as.Date(mes)) |>   # garante ordem cronológica antes do tail
-      tail(6)
+      dplyr::arrange(as.Date(mes)) |>
+      tail(12)
     validate(need(nrow(df)>0,"Sem dados."))
-    # Ordem explícita dos labels — evita Plotly reordenar alfabeticamente
     ordem_labels <- df$mes_label
-    n <- nrow(df); cores <- c(rep("#c5d8f7",max(n-1,0)),"#1a6ef7")[1:n]
-    plot_ly(df,x=~mes_label,y=~receita,type="bar",
-            marker=list(color=cores,line=list(color="transparent")),name="Receita Bruta",
-            hovertemplate="%{x}<br>Receita: R$ %{y:,.0f}<extra></extra>") |>
-      add_trace(y=~resultado,type="scatter",mode="lines+markers",
-                line=list(color="#00b388",width=2),marker=list(color="#00b388",size=6),
-                name="Resultado Líq.",yaxis="y2",
-                hovertemplate="%{x}<br>Resultado: R$ %{y:,.0f}<extra></extra>") |>
-      layout(paper_bgcolor="transparent",plot_bgcolor="transparent",
-             xaxis=list(showgrid=F,zeroline=F,tickfont=list(size=10),title="",
+    n <- nrow(df)
+    # PUB-9: resultado em barras, receita em linha
+    cores_bar <- c(rep("#c5ede3", max(n-1,0)), "#00b388")[1:n]
+    plot_ly(df, x=~mes_label, y=~resultado, type="bar",
+            marker=list(color=cores_bar, line=list(color="transparent")),
+            name="Resultado Líq.",
+            hovertemplate="%{x}<br>Resultado: R$ %{y:,.0f}<extra></extra>") |>
+      add_trace(y=~receita, type="scatter", mode="lines+markers",
+                line=list(color="#1a6ef7", width=2.5), marker=list(color="#1a6ef7", size=6),
+                name="Receita Bruta", yaxis="y2",
+                hovertemplate="%{x}<br>Receita: R$ %{y:,.0f}<extra></extra>") |>
+      layout(paper_bgcolor="transparent", plot_bgcolor="transparent",
+             xaxis=list(showgrid=F, zeroline=F, tickfont=list(size=10), title="",
                         categoryorder="array", categoryarray=ordem_labels),
-             yaxis=list(showgrid=T,gridcolor="#f0f4f8",zeroline=F,tickprefix="R$ ",tickfont=list(size=10),title=""),
-             yaxis2=list(overlaying="y",side="right",showgrid=F,zeroline=F,tickprefix="R$ ",tickfont=list(size=9),title=""),
+             yaxis=list(showgrid=T, gridcolor="#f0f4f8", zeroline=F, tickprefix="R$ ", tickfont=list(size=10), title=""),
+             yaxis2=list(overlaying="y", side="right", showgrid=F, zeroline=F, tickprefix="R$ ", tickfont=list(size=9), title=""),
              margin=list(l=52,r=52,t=8,b=30),
-             legend=list(x=0,y=1.15,orientation="h",font=list(size=10))) |>
+             legend=list(x=0, y=1.15, orientation="h", font=list(size=10))) |>
       config(displayModeBar=FALSE)
   })
   
@@ -2739,7 +2782,13 @@ server <- function(input, output, session) {
       st   <- .ger_status(key)
       pub  <- .ger_is_pub(key)
       
-      taxa_ed <- .ger_get(key, "taxa_adm",       row$taxa_adm)
+      taxa_ed     <- .ger_get(key, "taxa_adm",     row$taxa_adm)
+      taxa_pct_ed <- {
+        pct_salvo <- .ger_get(key, "taxa_adm_pct", NULL)
+        if (!is.null(pct_salvo) && !is.na(pct_salvo)) as.numeric(pct_salvo)
+        else if (row$receita_bruta > 0) round(taxa_ed / row$receita_bruta * 100, 2)
+        else 0
+      }
       man_ed  <- .ger_get(key, "manutencao",     row$manutencao_total)
       rep_ed  <- .ger_get(key, "reposicao",      row$reposicao_total)
       des_ed  <- .ger_get(key, "despesas",       row$despesas_total)
@@ -2795,7 +2844,9 @@ server <- function(input, output, session) {
                       div(class="ger-sum-item", div(class="ger-sum-lbl","Reposição"),    div(class="ger-sum-val r",  brl(rep_ed))),
                       div(class="ger-sum-item", div(class="ger-sum-lbl","Despesas"),     div(class="ger-sum-val r",  brl(des_ed))),
                       div(class="ger-sum-item", div(class="ger-sum-lbl","Resultado"),
-                          div(class=if(res_ed>=0)"ger-sum-val g"else"ger-sum-val r", brl(res_ed)))
+                          div(class=if(res_ed>=0)"ger-sum-val g"else"ger-sum-val r",
+                              id=paste0("ger_res_live_",ks),   # GER-1: target do JS de recálculo em tempo real
+                              brl(res_ed)))
                   ),
                   
                   # Campos editáveis
@@ -2818,10 +2869,24 @@ server <- function(input, output, session) {
                                            min = 0, step = 0.01, width = "100%")),
                           fmt_diff(row$receita_bruta, rec_ed)
                       ),
+                      # Taxa Administrativa — % é o campo principal, R$ é calculado automaticamente
                       div(class="ger-field-row",
-                          div(class="ger-field-lbl","Taxa Administrativa"),
-                          div(class="ger-field-orig", brl(row$taxa_adm)),
-                          div(class="ger-field-input", numericInput(paste0("ger_taxa_",ks), NULL, value=round(taxa_ed,2), min=0, step=0.01, width="100%")),
+                          div(style="display:flex;flex-direction:column;gap:2px;",
+                              div(class="ger-field-lbl","Taxa Administrativa"),
+                              div(style="font-size:10px;color:#9aa5b4;",
+                                  paste0("Original: ", brl(row$taxa_adm), " (",
+                                         round(if(row$receita_bruta>0) row$taxa_adm/row$receita_bruta*100 else 0, 1), "%)"))),
+                          div(class="ger-field-input", style="display:flex;align-items:center;gap:6px;",
+                              div(style="display:flex;flex-direction:column;gap:2px;",
+                                  tags$label(style="font-size:9px;color:#6b7280;font-weight:700;","%"),
+                                  numericInput(paste0("ger_taxa_pct_",ks), NULL,
+                                               value=round(taxa_pct_ed, 2),
+                                               min=0, max=100, step=0.01, width="80px")),
+                              div(style="color:#9aa5b4;font-size:18px;line-height:1;margin-top:12px;","→"),
+                              div(style="display:flex;flex-direction:column;gap:2px;",
+                                  tags$label(style="font-size:9px;color:#6b7280;font-weight:700;","R$ calculado"),
+                                  numericInput(paste0("ger_taxa_",ks), NULL,
+                                               value=round(taxa_ed,2), min=0, step=0.01, width="110px"))),
                           fmt_diff(row$taxa_adm, taxa_ed)),
                       div(class="ger-field-row",
                           div(class="ger-field-lbl","Manutenção"),
@@ -2894,6 +2959,59 @@ server <- function(input, output, session) {
             });
           }
         });
+        // GER-1: Recalcula resultado em tempo real ao editar qualquer campo numérico do card
+        document.addEventListener('input', function(e) {
+          var el = e.target;
+          if (!el || !el.id) return;
+          var match = el.id.match(/^ger_(rec|taxa|man|rep|des|taxa_pct)_(.+)$/);
+          if (!match) return;
+          var field = match[1];
+          var ks    = match[2];
+          function getVal(prefix) {
+            var inp = document.getElementById('ger_' + prefix + '_' + ks);
+            return inp ? (parseFloat(inp.value) || 0) : 0;
+          }
+          // Sincronizacao taxa: % e o campo principal, R$ e calculado automaticamente
+          if (field === 'taxa_pct') {
+            // Admin editou o %: recalcula R$ = receita x pct / 100
+            var rec2   = getVal('rec');
+            var newTax = Math.round((parseFloat(el.value) || 0) * rec2) / 100;
+            // Atualiza o DOM do numericInput R$ visualmente
+            var taxEl  = document.getElementById('ger_taxa_' + ks);
+            if (taxEl) taxEl.value = newTax.toFixed(2);
+            // Comunica o novo valor R$ ao Shiny via setInputValue
+            // (mais confiável que dispatchEvent em numericInput bindingsdo Shiny)
+            Shiny.setInputValue('ger_taxa_' + ks, newTax, {priority: 'event'});
+          } else if (field === 'taxa') {
+            // Admin editou o R$ diretamente: atualiza % como referencia visual
+            var rec3   = getVal('rec');
+            var pct    = rec3 > 0 ? ((parseFloat(el.value) || 0) / rec3 * 100) : 0;
+            var pctEl  = document.getElementById('ger_taxa_pct_' + ks);
+            if (pctEl) pctEl.value = pct.toFixed(2);
+            // Comunica o novo % ao Shiny
+            Shiny.setInputValue('ger_taxa_pct_' + ks, pct, {priority: 'event'});
+          } else if (field === 'rec') {
+            // Receita mudou: mantém o % e recalcula R$ da taxa
+            var pctAtual = getVal('taxa_pct');
+            var rec4     = parseFloat(el.value) || 0;
+            var newTax4  = Math.round(pctAtual * rec4) / 100;
+            var taxEl4   = document.getElementById('ger_taxa_' + ks);
+            if (taxEl4) taxEl4.value = newTax4.toFixed(2);
+            Shiny.setInputValue('ger_taxa_' + ks, newTax4, {priority: 'event'});
+          }
+          // GER-1: Recalcula resultado líquido no header do card
+          var rec  = getVal('rec');
+          var taxa = getVal('taxa');
+          var man  = getVal('man');
+          var rep  = getVal('rep');
+          var des  = getVal('des');
+          var res  = rec - taxa - man - rep - des;
+          var resEl = document.getElementById('ger_res_live_' + ks);
+          if (resEl) {
+            resEl.textContent = 'R$ ' + res.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+            resEl.className = res >= 0 ? 'ger-sum-val g' : 'ger-sum-val r';
+          }
+        });
         // Captura textarea nota
         document.addEventListener('change', function(e) {
           if (e.target && e.target.classList.contains('ger-nota')) {
@@ -2919,6 +3037,7 @@ server <- function(input, output, session) {
       ks   <- gsub("[^a-zA-Z0-9]", "_", key)
       
       id_save <- paste0("ger_save_",  ks)
+      id_rec  <- paste0("ger_rec_",   ks)   # GER-5: definido aqui para estar no escopo de Restaurar e Publicar
       id_taxa <- paste0("ger_taxa_",  ks)
       id_man  <- paste0("ger_man_",   ks)
       id_rep  <- paste0("ger_rep_",   ks)
@@ -2929,12 +3048,21 @@ server <- function(input, output, session) {
       
       # Salvar rascunho
       observeEvent(input[[id_save]], {
+        taxa_val_s  <- as.numeric(input[[id_taxa]] %||% df$taxa_adm[i])
+        id_taxa_pct <- paste0("ger_taxa_pct_", ks)
+        taxa_pct_s  <- tryCatch(as.numeric(input[[id_taxa_pct]]),
+                                error = function(e) {
+                                  if (df$receita_bruta[i] > 0)
+                                    round(taxa_val_s / df$receita_bruta[i] * 100, 2)
+                                  else 0
+                                })
         edits <- list(
-          taxa_adm   = as.numeric(input[[id_taxa]] %||% df$taxa_adm[i]),
-          manutencao = as.numeric(input[[id_man]]  %||% df$manutencao_total[i]),
-          reposicao  = as.numeric(input[[id_rep]]  %||% df$reposicao_total[i]),
-          despesas   = as.numeric(input[[id_des]]  %||% df$despesas_total[i]),
-          nota       = as.character(input[[id_nota]] %||% "")
+          taxa_adm     = taxa_val_s,
+          taxa_adm_pct = taxa_pct_s,
+          manutencao   = as.numeric(input[[id_man]]  %||% df$manutencao_total[i]),
+          reposicao    = as.numeric(input[[id_rep]]  %||% df$reposicao_total[i]),
+          despesas     = as.numeric(input[[id_des]]  %||% df$despesas_total[i]),
+          nota         = as.character(input[[id_nota]] %||% "")
         )
         rv$ger_edits[[key]] <- edits
         # Grava rascunho no SQLite (publicado = FALSE)
@@ -2949,8 +3077,11 @@ server <- function(input, output, session) {
         rv$ger_pub[[key]]   <- NULL
         # Remove do SQLite
         tryCatch(ger_delete_ajuste(mes, apto), error = function(e) NULL)
+        pct_orig <- if (df$receita_bruta[i] > 0)
+          round(df$taxa_adm[i] / df$receita_bruta[i] * 100, 2) else 0
         updateNumericInput(session, id_rec,  value = round(df$receita_bruta[i], 2))
         updateNumericInput(session, id_taxa, value = round(df$taxa_adm[i], 2))
+        updateNumericInput(session, paste0("ger_taxa_pct_", ks), value = pct_orig)
         updateNumericInput(session, id_man,  value = round(df$manutencao_total[i], 2))
         updateNumericInput(session, id_rep,  value = round(df$reposicao_total[i], 2))
         updateNumericInput(session, id_des,  value = round(df$despesas_total[i], 2))
@@ -2964,8 +3095,17 @@ server <- function(input, output, session) {
         rec_val_p  <- as.numeric(input[[id_rec]] %||% df$receita_bruta[i])
         rec_aj_p   <- if (abs(rec_val_p - as.numeric(df$receita_bruta[i])) > 0.01)
           rec_val_p else NULL
+        taxa_val_p   <- as.numeric(input[[id_taxa]] %||% df$taxa_adm[i])
+        id_taxa_pct2 <- paste0("ger_taxa_pct_", ks)
+        taxa_pct_p   <- tryCatch(as.numeric(input[[id_taxa_pct2]]),
+                                 error = function(e) {
+                                   if (df$receita_bruta[i] > 0)
+                                     round(taxa_val_p / df$receita_bruta[i] * 100, 2)
+                                   else 0
+                                 })
         edits <- list(
-          taxa_adm       = as.numeric(input[[id_taxa]] %||% df$taxa_adm[i]),
+          taxa_adm       = taxa_val_p,
+          taxa_adm_pct   = taxa_pct_p,
           manutencao     = as.numeric(input[[id_man]]  %||% df$manutencao_total[i]),
           reposicao      = as.numeric(input[[id_rep]]  %||% df$reposicao_total[i]),
           despesas       = as.numeric(input[[id_des]]  %||% df$despesas_total[i]),
