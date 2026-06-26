@@ -671,7 +671,12 @@ server <- function(input, output, session) {
         .groups = "drop"
       )
     out$n_imoveis <- n_im
-    out$revpar    <- if (!is.na(n_im) && n_im > 0) out$receita_bruta / n_im else NA_real_
+    dias_mes <- tryCatch(
+      as.integer(lubridate::days_in_month(as.Date(paste0(input$mes_sel, "-01")))),
+      error = function(e) NA_integer_
+    )
+    out$dias_mes <- dias_mes
+    out$revpar   <- if (!is.na(dias_mes) && dias_mes > 0) out$receita_bruta / dias_mes else NA_real_
     out
   })
   
@@ -738,55 +743,33 @@ server <- function(input, output, session) {
       # ════════════════════════════════════════
       div(class = "sec", "RESULTADOS DO MÊS"),
       div(class = "kgrid",
-          # Resultado Líquido — card principal em destaque
           kcard("Resultado Líquido", brl(m$resultado_liq),
                 paste0("receita: ", brl(m$receita_bruta)),
                 vg = TRUE, extra_class = "hero"),
           kcard("Receita Bruta",  brl(m$receita_bruta),  "receita do período"),
           kcard("RevPAR",
                 brl(if (!is.na(m$revpar)) m$revpar else 0),
-                paste0(m$n_imoveis, " imóvel(is) no filtro"), icon = "📈"),
+                paste0(if (!is.na(m$dias_mes)) m$dias_mes else "—", " dias no mês"), icon = "📈"),
           kcard("Taxa Adm.",      brl(m$taxa_adm),
                 paste0(round(if (m$receita_bruta > 0) m$taxa_adm / m$receita_bruta * 100 else 0, 1),
                        "% da receita"), dn = TRUE),
-          kcard("Outros Custos",  brl(m$outros_custos),  "fixa + variável",  dn = TRUE),
-          kcard("Ocupação",       paste0(round(m$ocupacao), "%"),
-                paste0("Diária média: ", brl(m$diaria_media)))
+          tags$div(
+            onclick = "document.getElementById('sec_operacional').scrollIntoView({behavior:'smooth'}); return false;",
+            style = "cursor:pointer;",
+            kcard("Outros Custos", brl(m$outros_custos), "", dn = TRUE)
+          ),
+          kcard("Ocupação", paste0(round(m$ocupacao), "%"),
+                paste0("Diária média: ", brl(m$diaria_media))),
+          kcard("Noites Reservadas", as.character(m$n_diarias), "noites no período")
       ),
       
       # ════════════════════════════════════════
-      # 2. PORTFÓLIO
-      # ════════════════════════════════════════
-      div(class = "sec", "PORTFÓLIO DE IMÓVEIS"),
-      {
-        cfg_lst <- d$imoveis_cfg
-        if (length(cfg_lst) == 0) p("Nenhum imóvel cadastrado.")
-        else div(class = "imovel-grid",
-                 lapply(cfg_lst, function(im) {
-                   plats <- strsplit(as.character(im$plataformas %||% ""), "/|,| ")[[1]]
-                   plats <- trimws(plats[nzchar(trimws(plats))])
-                   plat_tags <- lapply(plats, function(p) {
-                     cl <- switch(tolower(p),
-                                  "airbnb"="plat-tag p-air","booking"=,"bookingcom"="plat-tag p-bk",
-                                  "decolar"="plat-tag p-dc","vrbo"="plat-tag p-vr",
-                                  "expedia"="plat-tag p-ex","plat-tag p-out")
-                     div(class = cl, p)
-                   })
-                   div(class = "icard",
-                       div(class = "icard-nome", as.character(im$nome %||% im$id)),
-                       div(class = "icard-end",  as.character(im$bairro %||% "")),
-                       div(class = "icard-tipo", as.character(im$tipo %||% "")),
-                       div(class = "icard-plat", !!!plat_tags))
-                 }))
-      },
-      
-      # ════════════════════════════════════════
-      # 3. ANÁLISE DE RECEITA (gráfico diária/dia)
+      # 2. ANÁLISE DE RECEITA
       # ════════════════════════════════════════
       uiOutput("sec_analise_receita"),
       
       # ════════════════════════════════════════
-      # 4. DETALHAMENTO DO MÊS — calendário
+      # 3. DETALHAMENTO DO MÊS — calendário
       # ════════════════════════════════════════
       uiOutput("sec_detalhamento_mes"),
       
@@ -830,7 +813,7 @@ server <- function(input, output, session) {
       # ════════════════════════════════════════
       # 6. OPERACIONAL: Despesas | Custos | OS
       # ════════════════════════════════════════
-      div(class = "sec", "OPERACIONAL"),
+      div(class = "sec", id = "sec_operacional", "OPERACIONAL"),
       
       div(class = "card",
           # Tabs de navegação.
@@ -1020,17 +1003,75 @@ server <- function(input, output, session) {
       dt <- suppressWarnings(as.Date(paste0(input$mes_sel, "-01")))
       if (!is.na(dt)) fmt_mes_pt(dt, abreviado = TRUE) else input$mes_sel
     }
+    resv_det <- if (!is.null(d$reservas) && nrow(d$reservas) > 0) {
+      df_r <- d$reservas |> dplyr::filter(competencia == input$mes_sel)
+      if (nzchar(iid) && iid != "all")
+        df_r <- df_r |> dplyr::filter(imovel_nome == iid | property_id == iid)
+      df_r
+    } else data.frame()
+    kpis_diaria_ui <- if (nrow(resv_det) > 0) {
+      d_med   <- mean(resv_det$diaria_liquida, na.rm = TRUE)
+      d_max_v <- max(resv_det$diaria_liquida,  na.rm = TRUE)
+      vals_pos <- resv_det$diaria_liquida[!is.na(resv_det$diaria_liquida) & resv_det$diaria_liquida > 0]
+      d_min_v  <- if (length(vals_pos) > 0) min(vals_pos) else NA_real_
+      div(class = "kgrid-sm kgrid-sm-3", style = "margin-bottom:14px;",
+          kcard_sm("Diária Média", brl(d_med),   "blue"),
+          kcard_sm("Maior Diária", brl(d_max_v), "green"),
+          kcard_sm("Menor Diária", brl(d_min_v), "orange"))
+    } else NULL
     tagList(
       div(class = "sec", "DETALHAMENTO DO MÊS"),
+      kpis_diaria_ui,
       div(class = "det-wrap",
           div(class = "det-hdr",
               div(class = "det-ttl", "Calendário de Ocupação"),
               span(class = "badge badge-green", mes_badge_sm)
           ),
           shinycssloaders::withSpinner(uiOutput("calendario_v2"), type = 4, color = "#00c49a")
-      )
+      ),
+      div(class = "card", style = "margin-top:14px;",
+          div(class = "card-hdr",
+              div(class = "card-ttl", "Relatório de Reservas"),
+              span(class = "badge badge-blue", mes_badge_sm)),
+          div(class = "tab-wrap",
+              shinycssloaders::withSpinner(DTOutput("t_relatorio_reservas"), type = 4, color = "#1a6ef7")))
     )
   })
+  
+  # ═══════════════════════════════════════════════════════════
+  # OUTPUT: Relatório de Reservas (adicionado — Fix 5)
+  # ═══════════════════════════════════════════════════════════
+  output$t_relatorio_reservas <- renderDT({
+    d <- dados(); req(d, input$mes_sel)
+    resv <- if (!is.null(d$reservas) && nrow(d$reservas) > 0)
+      d$reservas |> dplyr::filter(competencia == input$mes_sel)
+    else return(datatable(data.frame(), options = list(dom = "t"), rownames = FALSE))
+    if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
+      resv <- resv |> dplyr::filter(imovel_nome == input$imovel | property_id == input$imovel)
+    resv <- resv |>
+      # Dedup: apartamentos com múltiplos donos geram 2 linhas idênticas
+      # na fact_reservas (uma por property_id). Remove duplicatas mantendo
+      # apenas 1 linha por reserva real (mesma data, noites e diária).
+      dplyr::distinct(checkin, checkout, noites_total, diaria_liquida, .keep_all = TRUE) |>
+      dplyr::arrange(checkin)
+    cols_ok <- names(resv)
+    df <- resv |> dplyr::transmute(
+      `Check-in`       = format(as.Date(checkin),  "%d/%m/%Y"),
+      `Check-out`      = format(as.Date(checkout), "%d/%m/%Y"),
+      `Canal`          = if ("canal"               %in% cols_ok) as.character(canal)              else "—",
+      `Noites`         = as.integer(dplyr::coalesce(as.numeric(noites_total), 0)),
+      `Adultos`        = if ("adultos"             %in% cols_ok) as.integer(dplyr::coalesce(as.numeric(adultos),  0)) else NA_integer_,
+      `Crianças`       = if ("criancas"            %in% cols_ok) as.integer(dplyr::coalesce(as.numeric(criancas), 0)) else NA_integer_,
+      `Valor Recebido` = brl(if ("valor_total_reserva" %in% cols_ok) valor_total_reserva else receita_total),
+      `Taxa Limpeza`   = brl(if ("taxa_limpeza"        %in% cols_ok) taxa_limpeza        else NA_real_),
+      `Comissão Canal` = brl(if ("comissao_canal"      %in% cols_ok) comissao_canal      else NA_real_),
+      `Diária Final`   = brl(diaria_liquida)
+    )
+    datatable(df,
+              options = list(dom = "t", paging = FALSE, ordering = TRUE,
+                             language = list(emptyTable = "Sem reservas no período")),
+              rownames = FALSE, class = "compact stripe")
+  }, server = FALSE)
   
   # ═══════════════════════════════════════════════════════════
   # OUTPUT: KPIs da Diária entre Check-ins

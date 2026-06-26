@@ -921,7 +921,9 @@ server <- function(input, output, session) {
     else return(datatable(data.frame(), options = list(dom = "t"), rownames = FALSE))
     if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
       resv <- resv |> dplyr::filter(imovel_nome == input$imovel | property_id == input$imovel)
-    resv <- resv |> dplyr::arrange(checkin)
+    resv <- resv |>
+      dplyr::distinct(checkin, checkout, noites_total, diaria_liquida, .keep_all = TRUE) |>
+      dplyr::arrange(checkin)
     cols_ok <- names(resv)
     df <- resv |> dplyr::transmute(
       `Check-in`       = format(as.Date(checkin),  "%d/%m/%Y"),
