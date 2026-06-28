@@ -514,9 +514,10 @@ server <- function(input, output, session) {
     df <- d$reservas |> dplyr::filter(competencia == input$mes_sel)
     if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
       df <- df |> dplyr::filter(imovel_nome == input$imovel)
-    df |> dplyr::arrange(checkin)
+    df |>
+      dplyr::arrange(checkin)
   })
-  
+
   # Filtra manutenção
   manutencao_fil <- reactive({
     d <- dados(); req(d, input$mes_sel)
@@ -922,10 +923,10 @@ server <- function(input, output, session) {
     if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
       resv <- resv |> dplyr::filter(imovel_nome == input$imovel | property_id == input$imovel)
     resv <- resv |>
-      dplyr::distinct(checkin, checkout, noites_total, diaria_liquida, .keep_all = TRUE) |>
       dplyr::arrange(checkin)
     cols_ok <- names(resv)
     df <- resv |> dplyr::transmute(
+      `Hóspede`        = if ("hospede"            %in% cols_ok) as.character(hospede)            else "—",
       `Check-in`       = format(as.Date(checkin),  "%d/%m/%Y"),
       `Check-out`      = format(as.Date(checkout), "%d/%m/%Y"),
       `Canal`          = if ("canal"              %in% cols_ok) as.character(canal)              else "—",
@@ -942,7 +943,7 @@ server <- function(input, output, session) {
                              language = list(emptyTable = "Sem reservas no período")),
               rownames = FALSE, class = "compact stripe")
   }, server = FALSE)
-  
+
   # ═══════════════════════════════════════════════════════════
   # OUTPUT: KPIs da Diária (MANTIDO internamente, não exibido na seção removida)
   # PUB-14: seção ANÁLISE DA DIÁRIA ENTRE CHECK-INS foi removida do layout
@@ -1321,10 +1322,16 @@ server <- function(input, output, session) {
   # ═══════════════════════════════════════════════════════════
   output$resultado <- renderUI({
     m <- rm()
+    dev_limp <- tryCatch({
+      df_dev <- rec_fil() |> dplyr::filter(competencia == input$mes_sel)
+      if ("devolucao_limpeza" %in% names(df_dev))
+        sum(df_dev$devolucao_limpeza, na.rm = TRUE) else 0
+    }, error = function(e) 0)
     div(
       frow("Receita Bruta",        brl(m$receita_bruta), FALSE),
       frow("Taxa Administrativa",  paste0("- ", brl(m$taxa_adm)),      TRUE),
       frow("Outros custos fixos",  paste0("- ", brl(m$outros_custos)), TRUE),
+      if (dev_limp > 0) frow("Devolução Taxa de Limpeza", paste0("+ ", brl(dev_limp)), FALSE),
       div(class = "ftotal",
           span("RESULTADO LÍQUIDO"),
           span(class = "fv g", brl(m$resultado_liq)))

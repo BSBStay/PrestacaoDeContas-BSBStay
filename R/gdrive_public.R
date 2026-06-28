@@ -591,6 +591,8 @@ montar_objeto_app_sqlite <- function(con) {
         manutencao_total  = dplyr::coalesce(as.numeric(manutencao_total), 0),
         reposicao_total   = dplyr::coalesce(as.numeric(reposicao_total), 0),
         despesas_total    = dplyr::coalesce(as.numeric(despesas_total), 0),
+        devolucao_limpeza = if ("devolucao_limpeza" %in% names(agg))
+          dplyr::coalesce(as.numeric(devolucao_limpeza), 0) else 0,
         resultado_liq     = dplyr::coalesce(as.numeric(resultado), 0),
         ocupacao      = round(dplyr::coalesce(as.numeric(taxa_ocupacao), 0) * 100),
         diaria_media  = dplyr::coalesce(as.numeric(diaria_media), 0),
@@ -717,7 +719,9 @@ montar_objeto_app_sqlite <- function(con) {
           taxa_limpeza         = if ("taxa_limpeza" %in% cols_res)
             dplyr::coalesce(as.numeric(taxa_limpeza), 0) else NA_real_,
           comissao_canal       = if ("comissao_canal" %in% cols_res)
-            dplyr::coalesce(as.numeric(comissao_canal), 0) else NA_real_
+            dplyr::coalesce(as.numeric(comissao_canal), 0) else NA_real_,
+          hospede              = if ("hospede" %in% cols_res)
+            as.character(hospede) else NA_character_
         ) |>
         dplyr::filter(!is.na(checkin), !is.na(checkout), checkout > checkin) |>
         dplyr::left_join(pid_map, by = "property_id") |>
