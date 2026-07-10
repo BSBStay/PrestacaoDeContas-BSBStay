@@ -486,6 +486,7 @@ server <- function(input, output, session) {
     app_data    = APP_DATA,
     aba         = "proprietario",
     op_aba      = "despesas",
+    ts_data     = -1,
     syncing     = FALSE,
     # Módulo Gerencial — estado de edições e publicações por (mes|apto)
     ger_edits   = list(),      # lista: chave = "mes|apto", valor = lista de ajustes
@@ -503,11 +504,13 @@ server <- function(input, output, session) {
   observe({
     invalidateLater(2000, session)
     if (exists("APP_DATA_GLOBAL") && is.list(APP_DATA_GLOBAL) && length(APP_DATA_GLOBAL) > 0) {
-      ts_global <- APP_DATA_GLOBAL$ts_refresh %||% 0
-      ts_local  <- if (is.list(rv$app_data)) rv$app_data$ts_refresh %||% -1 else -1
+      ts_global <- if (exists("APP_DATA_GLOBAL_TS")) APP_DATA_GLOBAL_TS else 0
+      ts_local  <- rv$ts_data %||% -1
       if (length(rv$app_data) == 0 || !identical(ts_global, ts_local)) {
         rv$app_data  <- APP_DATA_GLOBAL
-        rv$last_sync <- format(APP_DATA_GLOBAL$ts_refresh %||% Sys.time(), "%d/%m/%Y %H:%M")
+        rv$ts_data   <- ts_global
+        rv$last_sync <- format(if (inherits(ts_global, "POSIXct")) ts_global else Sys.time(),
+                               "%d/%m/%Y %H:%M")
       }
     }
   })

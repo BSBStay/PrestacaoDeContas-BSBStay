@@ -117,8 +117,8 @@ auto_refresh_ <- function(delay_s) {
       }
     )
     if (!is.null(novo) && is.list(novo) && length(novo) > 0) {
-      novo$ts_refresh  <- Sys.time()   # sinal para o polling detectar mudança
-      APP_DATA_GLOBAL <<- novo
+      APP_DATA_GLOBAL    <<- novo
+      APP_DATA_GLOBAL_TS <<- Sys.time()   # sinal separado — não contamina o objeto de dados
       message(sprintf("[run.R] Auto-refresh concluído: %d proprietário(s). Próximo em %.1fh.",
                       length(APP_DATA_GLOBAL), MAX_CACHE_AGE_H_RUN))
     }
