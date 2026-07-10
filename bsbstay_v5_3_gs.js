@@ -45,13 +45,17 @@ const CFG = {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("BSB3 • Atualização")
-    .addItem("▶ Atualizar mês atual",          "runMonthlyUpdateFixedRoot")
-    .addItem("⏭ Atualizar e avançar competência","runMonthlyUpdateAndAdvance")
+    .addItem("▶ Atualizar mês atual",             "runMonthlyUpdateFixedRoot")
+    .addItem("⏭ Atualizar e avançar competência", "runMonthlyUpdateAndAdvance")
     .addSeparator()
-    .addItem("Recalcular agregados",            "rebuildAggPrestacaoContas")
+    .addItem("Recalcular agregados",              "rebuildAggPrestacaoContas")
     .addSeparator()
-    .addItem("🗑 Limpar TODAS as FACTs",        "limparTodasFacts")
-    .addItem("♻ Reprocessar TODOS os meses",   "reprocessarTodosMeses")
+    .addItem("🗑 Limpar TODAS as FACTs",          "limparTodasFacts")
+    .addItem("♻ Reprocessar TODOS os meses",      "reprocessarTodosMeses")
+    .addSeparator()
+    .addItem("⏰ Ativar atualização automática diária",   "ativarTriggerDiario")
+    .addItem("⏹ Desativar atualização automática",        "desativarTriggerDiario")
+    .addItem("ℹ Ver status do trigger automático",         "verStatusTrigger")
     .addToUi();
 }
 
@@ -140,8 +144,34 @@ function runMonthlyUpdateAndAdvance() {
   advanceCompetenciaAtual_();
 }
 
+/**
+ * Descobre automaticamente todos os meses disponíveis no Drive
+ * (pastas AAAA/AAAA-MM dentro de ROOT_FOLDER_ID) sem lista hardcoded.
+ */
+function descobrirMesesNoDrive_() {
+  const root = DriveApp.getFolderById(ROOT_FOLDER_ID);
+  const meses = [];
+  const yearIt = root.getFolders();
+  while (yearIt.hasNext()) {
+    const yearFolder = yearIt.next();
+    const yearName = yearFolder.getName().trim();
+    if (!/^\d{4}$/.test(yearName)) continue;
+    const mesIt = yearFolder.getFolders();
+    while (mesIt.hasNext()) {
+      const mesFolder = mesIt.next();
+      const mesName = mesFolder.getName().trim();
+      if (/^\d{4}-\d{2}$/.test(mesName)) meses.push(mesName);
+    }
+  }
+  return meses.sort();
+}
+
 function reprocessarTodosMeses() {
-  const meses = ["2025-12", "2026-01", "2026-02", "2026-04", "2026-05"];
+  const meses = descobrirMesesNoDrive_();
+  if (meses.length === 0) {
+    SpreadsheetApp.getUi().alert("Nenhum mês encontrado no Drive.");
+    return;
+  }
   const resultados = [];
 
   for (const mes of meses) {
@@ -157,6 +187,71 @@ function reprocessarTodosMeses() {
   SpreadsheetApp.getUi().alert(
     "Reprocessamento completo:\n\n" + resultados.join("\n")
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trigger automático diário
+// ─────────────────────────────────────────────────────────────────────────────
+const TRIGGER_HANDLER = "reprocessarTodosMeses";
+const TRIGGER_HORA    = 6; // 06h00 horário do projeto (America/Sao_Paulo)
+
+/**
+ * Ativa um trigger diário que reprocessa todos os meses automaticamente.
+ * Idempotente: remove triggers antigos antes de criar um novo.
+ * A re-execução diária garante que qualquer alteração nas planilhas base
+ * (Drive) seja refletida no DB_MASTER sem intervenção manual.
+ */
+function ativarTriggerDiario() {
+  // Remove triggers existentes para evitar duplicatas
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === TRIGGER_HANDLER)
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+  ScriptApp.newTrigger(TRIGGER_HANDLER)
+    .timeBased()
+    .everyDays(1)
+    .atHour(TRIGGER_HORA)
+    .create();
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Atualização automática ativada!\n\n" +
+    `Todos os meses serão reprocessados diariamente às ${TRIGGER_HORA}h.\n` +
+    "Qualquer alteração nas planilhas do Drive será refletida automaticamente."
+  );
+}
+
+/**
+ * Remove o trigger automático diário.
+ */
+function desativarTriggerDiario() {
+  const triggers = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === TRIGGER_HANDLER);
+
+  if (triggers.length === 0) {
+    SpreadsheetApp.getUi().alert("Nenhum trigger automático ativo no momento.");
+    return;
+  }
+  triggers.forEach(t => ScriptApp.deleteTrigger(t));
+  SpreadsheetApp.getUi().alert("⏹ Atualização automática desativada.");
+}
+
+/**
+ * Mostra o status atual do trigger automático.
+ */
+function verStatusTrigger() {
+  const triggers = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === TRIGGER_HANDLER);
+
+  if (triggers.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      "Status: INATIVO\n\nUse 'Ativar atualização automática diária' para habilitar."
+    );
+  } else {
+    SpreadsheetApp.getUi().alert(
+      `Status: ATIVO ✅\n\n${triggers.length} trigger(s) configurado(s).\n` +
+      `Execução diária às ${TRIGGER_HORA}h — reprocessa todos os meses encontrados no Drive.`
+    );
+  }
 }
 
 /**

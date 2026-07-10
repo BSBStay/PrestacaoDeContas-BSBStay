@@ -83,28 +83,51 @@ message(sprintf("[run.R] Etapa A concluída: %d proprietário(s) em cache.", len
 # ── 6. Inicia o app (porta abre aqui) ────────────────────────
 app <- source(file.path(app_root, "app.R"), local = new.env())$value
 
-# ── 7. Etapa B — atualização do Drive em background ──────────
-# Executa APÓS o print(app) iniciar o servidor Shiny.
-# later::later garante que roda dentro do event loop do Shiny,
-# atualizando APP_DATA_GLOBAL sem bloquear nenhuma sessão ativa.
-later::later(function() {
-  message("[run.R] Etapa B — baixando dados atualizados do Drive...")
-  novo <- tryCatch(
-    carregar_dados_app(
-      file_id    = DRIVE_FILE_ID,
-      folder_id  = DRIVE_FOLDER_ID,
-      forcar_dl  = TRUE,    # força download do Drive
-      forcar_etl = TRUE     # reprocessa ETL
-    ),
-    error = function(e) {
-      message("[run.R] Etapa B falhou: ", e$message)
-      NULL
+# ── 7. Loop de atualização automática em background ──────────
+#
+# Ciclo auto-renovável via later::later recursivo:
+#   - Primeira execução: delay = 1s (Etapa B, logo após a porta abrir)
+#   - Execuções seguintes: delay = MAX_CACHE_AGE_H horas
+#
+# Garante que qualquer alteração feita nas planilhas do Drive
+# (e processada pelo trigger diário do ETL às 6h) seja refletida
+# automaticamente no dashboard sem nenhuma intervenção manual.
+# O polling de 2s no servidor Shiny detecta a mudança em APP_DATA_GLOBAL
+# e atualiza rv$app_data em todas as sessões ativas.
+
+MAX_CACHE_AGE_H_RUN <- suppressWarnings(
+  as.numeric(Sys.getenv("MAX_CACHE_AGE_H", "2"))
+)
+if (is.na(MAX_CACHE_AGE_H_RUN) || MAX_CACHE_AGE_H_RUN <= 0) MAX_CACHE_AGE_H_RUN <- 2
+
+auto_refresh_ <- function(delay_s) {
+  later::later(function() {
+    ts <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    message(sprintf("[run.R] Auto-refresh iniciado em %s ...", ts))
+    novo <- tryCatch(
+      carregar_dados_app(
+        file_id    = DRIVE_FILE_ID,
+        folder_id  = DRIVE_FOLDER_ID,
+        forcar_dl  = TRUE,
+        forcar_etl = TRUE
+      ),
+      error = function(e) {
+        message("[run.R] Auto-refresh falhou: ", e$message)
+        NULL
+      }
+    )
+    if (!is.null(novo) && length(novo) > 0) {
+      novo$ts_refresh  <- Sys.time()   # sinal para o polling detectar mudança
+      APP_DATA_GLOBAL <<- novo
+      message(sprintf("[run.R] Auto-refresh concluído: %d proprietário(s). Próximo em %.1fh.",
+                      length(APP_DATA_GLOBAL), MAX_CACHE_AGE_H_RUN))
     }
-  )
-  if (!is.null(novo) && length(novo) > 0) {
-    APP_DATA_GLOBAL <<- novo
-    message(sprintf("[run.R] Etapa B concluída: %d proprietário(s) atualizados.", length(APP_DATA_GLOBAL)))
-  }
-}, delay = 1)
+    # Agenda a próxima execução
+    auto_refresh_(MAX_CACHE_AGE_H_RUN * 3600)
+  }, delay = delay_s)
+}
+
+# Primeira execução: 1s após a porta abrir (Etapa B)
+auto_refresh_(1)
 
 print(app)

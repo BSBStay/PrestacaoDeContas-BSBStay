@@ -497,13 +497,17 @@ server <- function(input, output, session) {
   observeEvent(input$btn_aba,    { rv$aba    <- input$btn_aba    }, ignoreInit = TRUE)
   observeEvent(input$btn_aba_op, { rv$op_aba <- input$btn_aba_op }, ignoreInit = TRUE)
   
-  # Polling: sincroniza rv$app_data com APP_DATA_GLOBAL (Etapa B do run.R)
+  # Polling: sincroniza rv$app_data com APP_DATA_GLOBAL
+  # Detecta mudanças via ts_refresh (gravado pelo auto_refresh_ em run.R),
+  # cobrindo tanto a Etapa B inicial quanto os refreshes periódicos automáticos.
   observe({
     invalidateLater(2000, session)
     if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
-      if (length(rv$app_data) == 0 ||
-          length(APP_DATA_GLOBAL) != length(rv$app_data)) {
-        rv$app_data <- APP_DATA_GLOBAL
+      ts_global <- APP_DATA_GLOBAL$ts_refresh %||% 0
+      ts_local  <- rv$app_data$ts_refresh     %||% -1
+      if (length(rv$app_data) == 0 || !identical(ts_global, ts_local)) {
+        rv$app_data  <- APP_DATA_GLOBAL
+        rv$last_sync <- format(APP_DATA_GLOBAL$ts_refresh %||% Sys.time(), "%d/%m/%Y %H:%M")
       }
     }
   })
