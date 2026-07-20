@@ -26,7 +26,7 @@ const CFG = {
     SOURCES_FOLDER: "01_Fontes",
     RESERVAS:       ["Reservas"],
     MANUTENCAO:     ["Manutencao", "Manutenção"],
-    REPOSICAO:      ["Reposicao", "Reposição", "Resposicao"],
+    REPOSICAO:      ["Reposicao", "Reposição", "Resposicao", "Itens de reposicao", "Itens de Reposicao", "Itens de Reposição"],
     PAGAMENTOS:     ["Pagamentos"],
     // Dez/2025: pasta nomeada "Proprietários" (com acento til)
     // Jan/2026+: pasta nomeada "Proprietarios" (sem acento)
@@ -56,6 +56,11 @@ function onOpen() {
     .addItem("⏰ Ativar atualização automática diária",   "ativarTriggerDiario")
     .addItem("⏹ Desativar atualização automática",        "desativarTriggerDiario")
     .addItem("ℹ Ver status do trigger automático",         "verStatusTrigger")
+    .addSeparator()
+    .addItem("🔗 Ver link de atualização (Web App)",       "verLinkWebApp")
+    .addSeparator()
+    .addItem("🔍 Sugerir aliases para pendentes",          "sugerirAliases")
+    .addItem("✅ Confirmar aliases sugeridos",              "confirmarAliasesSugeridos")
     .addToUi();
 }
 
@@ -252,6 +257,198 @@ function verStatusTrigger() {
       `Execução diária às ${TRIGGER_HORA}h — reprocessa todos os meses encontrados no Drive.`
     );
   }
+}
+
+function verLinkWebApp() {
+  const url = ScriptApp.getService().getUrl();
+  if (!url) {
+    SpreadsheetApp.getUi().alert(
+      "Web App ainda não publicado.\n\n" +
+      "Acesse: Apps Script → Implantar → Novo implantação → Web App\n" +
+      "Executar como: Eu | Acesso: Qualquer pessoa"
+    );
+    return;
+  }
+  SpreadsheetApp.getUi().alert(
+    "🔗 Link de atualização automática:\n\n" + url +
+    "\n\nSalve este link nos favoritos. Ao clicar, o sistema detecta\n" +
+    "automaticamente quais meses foram alterados e reprocessa só eles.\n\n" +
+    "Para forçar todos os meses: " + url + "?todos=1\n" +
+    "Para um mês específico: " + url + "?mes=2026-06"
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Web App — endpoint HTTP para reprocessamento sem abrir o Apps Script
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ponto de entrada HTTP do Web App.
+ * Uso:
+ *   GET <url>                → detecta meses alterados e reprocessa só eles
+ *   GET <url>?mes=2026-06   → força reprocessamento de um mês específico
+ *   GET <url>?todos=1       → reprocessa todos os meses (equivale ao menu)
+ *
+ * Para publicar: Apps Script → Implantar → Novo implantação → Web App
+ *   Executar como: Eu (conta do projeto)
+ *   Quem tem acesso: Qualquer pessoa (ou "Qualquer pessoa com conta Google" se preferir)
+ */
+function doGet(e) {
+  const params  = e && e.parameter ? e.parameter : {};
+  const resultados = [];
+  let   titulo  = "";
+
+  try {
+    if (params.mes) {
+      // Reprocessa mês específico
+      const comp = parseCompetencia_(params.mes);
+      if (!comp) throw new Error(`Parâmetro mes inválido: "${params.mes}". Use AAAA-MM.`);
+      titulo = `Reprocessando ${comp}...`;
+      setCompetenciaAtual_(comp);
+      runMonthlyUpdateFixedRoot();
+      resultados.push({ mes: comp, status: "✅ OK" });
+
+    } else if (params.todos === "1") {
+      // Reprocessa todos os meses do Drive
+      titulo = "Reprocessando todos os meses...";
+      const meses = descobrirMesesNoDrive_();
+      for (const mes of meses) {
+        try {
+          setCompetenciaAtual_(mes);
+          runMonthlyUpdateFixedRoot();
+          resultados.push({ mes, status: "✅ OK" });
+        } catch(err) {
+          resultados.push({ mes, status: `❌ ${err.message}` });
+        }
+      }
+
+    } else {
+      // Detecta automaticamente quais meses foram alterados no Drive
+      titulo = "Detectando meses alterados...";
+      const mesesAlterados = descobrirMesesAlterados_();
+      if (mesesAlterados.length === 0) {
+        return _htmlResponse("Nenhuma alteração detectada",
+          "<p>Nenhum mês foi modificado desde o último processamento.</p>", []);
+      }
+      for (const mes of mesesAlterados) {
+        try {
+          setCompetenciaAtual_(mes);
+          runMonthlyUpdateFixedRoot();
+          resultados.push({ mes, status: "✅ OK" });
+        } catch(err) {
+          resultados.push({ mes, status: `❌ ${err.message}` });
+        }
+      }
+    }
+
+    // Grava timestamp da última execução no CONFIG
+    gravarUltimaExecucao_();
+
+  } catch(err) {
+    return _htmlResponse("Erro no reprocessamento", `<p>❌ ${err.message}</p>`, []);
+  }
+
+  return _htmlResponse("Reprocessamento concluído", titulo, resultados);
+}
+
+/**
+ * Descobre quais meses do Drive foram modificados após o último
+ * processamento registrado no CONFIG (chave "ultima_execucao_etl").
+ * Compara a data de modificação da pasta mensal com o timestamp salvo.
+ */
+function descobrirMesesAlterados_() {
+  const ultimaExec = lerUltimaExecucao_();
+  const root = DriveApp.getFolderById(ROOT_FOLDER_ID);
+  const alterados = [];
+
+  const yearIt = root.getFolders();
+  while (yearIt.hasNext()) {
+    const yearFolder = yearIt.next();
+    if (!/^\d{4}$/.test(yearFolder.getName().trim())) continue;
+    const mesIt = yearFolder.getFolders();
+    while (mesIt.hasNext()) {
+      const mesFolder = mesIt.next();
+      const mesName = mesFolder.getName().trim();
+      if (!/^\d{4}-\d{2}$/.test(mesName)) continue;
+      // Verifica se qualquer arquivo dentro da pasta foi modificado após ultimaExec
+      if (_pastaFoiAlterada_(mesFolder, ultimaExec)) {
+        alterados.push(mesName);
+      }
+    }
+  }
+  return alterados.sort();
+}
+
+function _pastaFoiAlterada_(folder, desde) {
+  // Verifica arquivos na pasta e subpastas recursivamente
+  const fileIt = folder.getFiles();
+  while (fileIt.hasNext()) {
+    if (fileIt.next().getLastUpdated() > desde) return true;
+  }
+  const subIt = folder.getFolders();
+  while (subIt.hasNext()) {
+    if (_pastaFoiAlterada_(subIt.next(), desde)) return true;
+  }
+  return false;
+}
+
+function lerUltimaExecucao_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(CFG.SHEETS.CONFIG);
+  if (!sh) return new Date(0);
+  const lr = sh.getLastRow(), lc = sh.getLastColumn();
+  if (lr < 2 || lc < 2) return new Date(0);
+  const data = sh.getRange(1, 1, lr, lc).getValues();
+  const hdrs = data[0].map(x => String(x).trim().toLowerCase());
+  const ki = hdrs.indexOf("chave"), vi = hdrs.indexOf("valor");
+  if (ki < 0 || vi < 0) return new Date(0);
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][ki]).trim().toLowerCase() === "ultima_execucao_etl") {
+      const v = data[r][vi];
+      return v instanceof Date ? v : new Date(String(v));
+    }
+  }
+  return new Date(0);
+}
+
+function gravarUltimaExecucao_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(CFG.SHEETS.CONFIG);
+  if (!sh) return;
+  const lr = sh.getLastRow(), lc = sh.getLastColumn();
+  if (lr < 2 || lc < 2) return;
+  const data = sh.getRange(1, 1, lr, lc).getValues();
+  const hdrs = data[0].map(x => String(x).trim().toLowerCase());
+  const ki = hdrs.indexOf("chave"), vi = hdrs.indexOf("valor");
+  if (ki < 0 || vi < 0) return;
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][ki]).trim().toLowerCase() === "ultima_execucao_etl") {
+      sh.getRange(r + 1, vi + 1).setValue(new Date());
+      return;
+    }
+  }
+  // Chave não existe ainda: adiciona nova linha
+  sh.appendRow(["ultima_execucao_etl", new Date()]);
+}
+
+function _htmlResponse(titulo, subtitulo, resultados) {
+  const linhas = resultados.map(r =>
+    `<tr><td>${r.mes}</td><td>${r.status}</td></tr>`
+  ).join("");
+  const tabela = resultados.length > 0
+    ? `<table border="1" cellpadding="6" style="border-collapse:collapse">
+        <tr><th>Mês</th><th>Status</th></tr>${linhas}</table>`
+    : "";
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>BSBStay ETL</title>
+    <style>body{font-family:sans-serif;padding:24px;max-width:600px}
+    h2{color:#1a5276}td,th{padding:6px 12px}
+    tr:nth-child(even){background:#f2f2f2}</style></head><body>
+    <h2>BSBStay — Atualização de Dados</h2>
+    <p><strong>${titulo}</strong></p>${subtitulo}${tabela}
+    <p style="color:#888;font-size:12px">Executado em: ${new Date().toLocaleString("pt-BR")}</p>
+    </body></html>`;
+  return HtmlService.createHtmlOutput(html)
+    .setTitle("BSBStay ETL")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 /**
@@ -584,6 +781,17 @@ function normalize_(s) {
  * Se a string não tiver esse padrão, retorna inalterada — seguro para
  * qualquer header normal.
  */
+/**
+ * Repara mojibake específico de em dash e en dash lidos como Windows-1252.
+ * U+2013 (en dash)  → UTF-8: E2 80 93 → Latin-1: â€" (â€“)
+ * U+2014 (em dash)  → UTF-8: E2 80 94 → Latin-1: â€" (â€”)
+ * Qualquer sequência â€+char é substituída por espaço, depois dashes reais também.
+ * Seguro para nomes de apartamentos — nunca quebra strings sem o padrão.
+ */
+function fixAptMojibake_(s) {
+  return String(s || "").replace(/â€./g, " ").replace(/[–—]/g, " ").trim();
+}
+
 function fixMojibake_(s) {
   const str = String(s || "");
   if (!/Ã[\x80-\xBF]/.test(str)) return str; // não tem padrão de mojibake, retorna direto
@@ -694,16 +902,18 @@ function onlyDigits_(s) { return String(s||"").replace(/\D+/g,""); }
 
 function sanitizeHospede_(v) {
   if (v == null || v === "") return "";
-  let s = String(v).trim();
-  // Remove CPF: 000.000.000-00 ou 00000000000
+  // 1. Corrige encoding antes de qualquer outra operação
+  let s = fixMojibake_(String(v).trim());
+  // 2. Mantém apenas o PRIMEIRO hóspede — corta no primeiro separador de multi-hóspede.
+  //    Padrões encontrados nos dados: "Nome CPF: Nome2", "Nome - CPF: Nome2",
+  //    "Nome cpf . Nome2", "Nome / Nome2", "Nome // Nome2", "Nome | Nome2"
+  s = s.split(/\s+[-–]?\s*\bCPF\b|\/\/|\s+\|\s+|\s+\/(?=[^\s])/i)[0].trim();
+  // 3. Remove números de documentos restantes (CPF, RG, passaporte)
   s = s.replace(/\d{3}\.?\d{3}\.?\d{3}[-.]?\d{2}/g, "").trim();
-  // Remove RG: 0.000.000 ou 0000000 (7-10 dígitos seguidos)
-  s = s.replace(/\d{1,2}\.?\d{3}\.?\d{3}[-.]?\d{0,2}/g, "").trim();
-  // Remove passaporte: sequências alfanuméricas longas (ex: AB123456)
   s = s.replace(/[A-Z]{1,2}\d{6,}/gi, "").trim();
-  // Remove sequências de 7+ dígitos soltos restantes
   s = s.replace(/\d{7,}/g, "").trim();
-  // Limpa separadores órfãos
+  // 4. Remove a palavra CPF e separadores órfãos nas bordas
+  s = s.replace(/\s*\bCPF\b\s*$/i, "").trim();
   s = s.replace(/^[\s\-\/|:;,]+|[\s\-\/|:;,]+$/g, "").trim();
   return s;
 }
@@ -932,8 +1142,9 @@ function buildCanonMap_() {
  * a função chamadora deve replicar a linha de dados para cada um.
  */
 function resolveAll_(aliasMap, canonMap, source, aptoOriginal) {
-  const aptoNorm  = normalize_(aptoOriginal);
-  const aptoLoose = normalizeLoose_(aptoOriginal);
+  const aptoFixed  = fixAptMojibake_(aptoOriginal);
+  const aptoNorm   = normalize_(aptoFixed);
+  const aptoLoose  = normalizeLoose_(aptoFixed);
   const pids =
     aliasMap.get(`${source}||${aptoNorm}`)  ||
     canonMap.get(aptoNorm)                   ||
@@ -956,6 +1167,192 @@ function resolve_(aliasMap, canonMap, source, aptoOriginal) {
 function queuePend_(batch, competencia, source, aptoOriginal, aptoNorm, obs) {
   batch.push([new Date(), competencia, source, "IMOVEL_NAO_CADASTRADO",
     aptoOriginal, aptoNorm, "", obs||""]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gestão de aliases — Sugestão e confirmação
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lê o PENDENTES_map_alias, coleta nomes únicos ainda sem alias,
+ * pontua cada um contra os nomes canônicos do dim_imovel por sobreposição
+ * de tokens e grava sugestões na aba "ALIASES_SUGERIDOS" para revisão manual.
+ *
+ * Verde  = confiança ALTA  (≥ 60 % de tokens em comum) — pré-preenchido
+ * Amarelo = confiança MÉDIA (≥ 30 %)                   — revise
+ * Laranja = confiança BAIXA (< 30 %)                   — preencha manualmente
+ *
+ * Após revisar a aba, execute "✅ Confirmar aliases sugeridos" para aplicar.
+ */
+function sugerirAliases() {
+  const ss     = SpreadsheetApp.getActive();
+  const pendSh = ss.getSheetByName(CFG.SHEETS.PEND);
+  if (!pendSh || pendSh.getLastRow() < 2) {
+    SpreadsheetApp.getUi().alert("Nenhum registro em PENDENTES_map_alias.");
+    return;
+  }
+
+  const aliasMap = buildAliasMap_();
+  const canonMap = buildCanonMap_();
+  const values   = pendSh.getDataRange().getValues();
+  const pending  = new Map();
+
+  // Colunas: ts(0) competencia(1) source(2) tipo_pendencia(3) apto_original(4) apto_normalizado(5)
+  for (let i = 1; i < values.length; i++) {
+    const r        = values[i];
+    const source   = String(r[2] || "").trim();
+    const aptoOrig = String(r[4] || "").trim();
+    const aptoNorm = String(r[5] || "").trim();
+    if (!source || !aptoNorm) continue;
+    const k = `${source}||${aptoNorm}`;
+    if (aliasMap.has(k) || canonMap.has(aptoNorm)) continue; // já resolvido
+    if (!pending.has(k)) pending.set(k, { source, aptoOrig, aptoNorm });
+  }
+
+  if (pending.size === 0) {
+    SpreadsheetApp.getUi().alert("✅ Todos os pendentes já possuem alias ou foram resolvidos.");
+    return;
+  }
+
+  const dim = readTable_(CFG.SHEETS.DIM_IMOVEL);
+  const canonicals = dim.rows
+    .map(r => ({
+      pid:  String(r[dim.idx["property_id"]]  || "").trim(),
+      nome: String(r[dim.idx["nome_canonico"]] || "").trim(),
+      norm: normalize_(String(r[dim.idx["nome_canonico"]] || ""))
+    }))
+    .filter(c => c.pid && c.nome);
+
+  function scoreMatch(a, b) {
+    const aT = new Set(a.split(" ").filter(t => t.length > 1));
+    const bT = new Set(b.split(" ").filter(t => t.length > 1));
+    if (aT.size + bT.size === 0) return 0;
+    let overlap = 0;
+    for (const t of aT) if (bT.has(t)) overlap++;
+    return overlap / Math.max(aT.size, bT.size);
+  }
+
+  let helperSh = ss.getSheetByName("ALIASES_SUGERIDOS");
+  if (!helperSh) helperSh = ss.insertSheet("ALIASES_SUGERIDOS");
+  else helperSh.clearContents().clearFormats();
+
+  const headers = [
+    "source", "apto_normalizado_pendente", "apto_original",
+    "property_id_sugerido", "nome_canonico_sugerido", "confianca",
+    "property_id_confirmado ← EDITE AQUI"
+  ];
+  const out = [headers];
+
+  for (const [, info] of pending) {
+    let best = null, bestScore = 0;
+    for (const c of canonicals) {
+      const s = scoreMatch(info.aptoNorm, c.norm);
+      if (s > bestScore) { bestScore = s; best = c; }
+    }
+    const conf = bestScore >= 0.6 ? "ALTA" : bestScore >= 0.3 ? "MÉDIA" : "BAIXA";
+    out.push([
+      info.source,
+      info.aptoNorm,
+      info.aptoOrig,
+      best ? best.pid  : "",
+      best ? best.nome : "",
+      conf,
+      best && bestScore >= 0.6 ? best.pid : ""
+    ]);
+  }
+
+  helperSh.getRange(1, 1, out.length, headers.length).setValues(out);
+  helperSh.setFrozenRows(1);
+  helperSh.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+
+  for (let i = 1; i < out.length; i++) {
+    const conf = out[i][5];
+    const bg   = conf === "ALTA" ? "#d9ead3" : conf === "MÉDIA" ? "#fff2cc" : "#fce5cd";
+    helperSh.getRange(i + 1, 1, 1, headers.length).setBackground(bg);
+  }
+  helperSh.autoResizeColumns(1, headers.length);
+
+  ss.setActiveSheet(helperSh);
+  SpreadsheetApp.getUi().alert(
+    `🔍 ${pending.size} pendentes listados na aba "ALIASES_SUGERIDOS".\n\n` +
+    `Preencha a última coluna "property_id_confirmado" para cada linha:\n` +
+    `  🟢 VERDE  = alta confiança (pré-preenchido — confira e mantenha)\n` +
+    `  🟡 AMARELO = confiança média (revise o property_id sugerido)\n` +
+    `  🟠 LARANJA = baixa confiança (preencha manualmente)\n\n` +
+    `Deixe "property_id_confirmado" em branco para ignorar o apartamento\n` +
+    `(ex.: apartamentos de outros clientes BSBStay que não pertencem ao portfólio).\n\n` +
+    `Quando terminar, execute "✅ Confirmar aliases sugeridos" no menu.`
+  );
+}
+
+/**
+ * Lê a aba "ALIASES_SUGERIDOS" (gerada por sugerirAliases),
+ * pega todas as linhas onde "property_id_confirmado" foi preenchido
+ * e insere os novos aliases em map_alias_imovel.
+ * Ignora duplicatas já existentes.
+ */
+function confirmarAliasesSugeridos() {
+  const ss       = SpreadsheetApp.getActive();
+  const helperSh = ss.getSheetByName("ALIASES_SUGERIDOS");
+  if (!helperSh || helperSh.getLastRow() < 2) {
+    SpreadsheetApp.getUi().alert(
+      "Aba ALIASES_SUGERIDOS não encontrada.\nExecute '🔍 Sugerir aliases para pendentes' primeiro.");
+    return;
+  }
+
+  const values  = helperSh.getDataRange().getValues();
+  const hdr     = values[0].map(h => String(h).trim().toLowerCase());
+  const iSrc    = hdr.findIndex(h => h === "source");
+  const iNorm   = hdr.findIndex(h => h.startsWith("apto_normalizado_p"));
+  const iPidConf= hdr.findIndex(h => h.startsWith("property_id_confirmado"));
+
+  if (iSrc < 0 || iNorm < 0 || iPidConf < 0) {
+    SpreadsheetApp.getUi().alert(
+      "Colunas esperadas não encontradas em ALIASES_SUGERIDOS.\n" +
+      "Regenere a aba com '🔍 Sugerir aliases para pendentes'.");
+    return;
+  }
+
+  // Lê aliases já existentes para evitar duplicatas
+  const mapSh   = ss.getSheetByName(CFG.SHEETS.MAP_ALIAS);
+  const existing = new Set();
+  if (mapSh && mapSh.getLastRow() >= 2) {
+    const mapVals = mapSh.getRange(2, 1, mapSh.getLastRow() - 1, 3).getValues();
+    for (const r of mapVals) {
+      existing.add(`${String(r[0]).trim()}||${String(r[1]).trim()}`);
+    }
+  }
+
+  const toAdd = [];
+  let   skipped = 0;
+
+  for (let i = 1; i < values.length; i++) {
+    const src     = String(values[i][iSrc]     || "").trim();
+    const norm    = String(values[i][iNorm]    || "").trim();
+    const pidConf = String(values[i][iPidConf] || "").trim();
+    if (!src || !norm || !pidConf) { skipped++; continue; }
+    const k = `${src}||${norm}`;
+    if (existing.has(k)) { skipped++; continue; }
+    toAdd.push([src, norm, pidConf]);
+    existing.add(k);
+  }
+
+  if (toAdd.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      `Nenhum alias novo para inserir.\n` +
+      `(${skipped} linha(s) ignorada(s): sem property_id preenchido ou alias já existente.)`);
+    return;
+  }
+
+  if (mapSh) {
+    mapSh.getRange(mapSh.getLastRow() + 1, 1, toAdd.length, 3).setValues(toAdd);
+  }
+
+  SpreadsheetApp.getUi().alert(
+    `✅ ${toAdd.length} alias(es) adicionado(s) a map_alias_imovel.\n` +
+    `${skipped} linha(s) ignorada(s) (sem property_id ou já existentes).\n\n` +
+    `Execute "♻ Reprocessar TODOS os meses" para recalcular os dados.`
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1494,6 +1891,13 @@ function ingestDevolucao_(competencia, sourcesFolder, dedupe, aliasMap, canonMap
 }
 
 function rebuildAggPrestacaoContas(competencia) {
+  // Sempre lê TODAS as FACTs e sobrescreve o AGG completo (writeTableFull_).
+  // Isso garante: sem duplicatas (sem merge kept+out), sem meses perdidos
+  // (todas as FACTs são lidas independente do mês passado como argumento).
+  // O argumento `competencia` é aceito para compatibilidade com as chamadas
+  // em runMonthlyUpdateFixedRoot, mas não filtra a leitura — as FACTs já
+  // estão corretas (removeRowsByCompetencia_ + reingestão) antes desta chamada.
+
   const factRes   = readTable_(CFG.SHEETS.FACT_RES);
   const factMan   = readTable_(CFG.SHEETS.FACT_MAN);
   const factRep   = readTable_(CFG.SHEETS.FACT_REP);
@@ -1590,7 +1994,6 @@ function rebuildAggPrestacaoContas(competencia) {
     if (!c||!p) continue;
     getA_(c,p).despesas_total += Number(r[factDes.idx["valor"]]||0);
   }
-  // Devolução de taxa de limpeza: acumula por imóvel/competência
   for (const r of factDev.rows) {
     const c = parseCompetencia_(r[factDev.idx["competencia"]]);
     const p = String(r[factDev.idx["property_id"]]||"").trim();
@@ -1641,47 +2044,11 @@ function rebuildAggPrestacaoContas(competencia) {
     "custos_total","resultado","itens_reposicao","qtd_itens","devolucao_limpeza"
   ];
 
-  // CIRÚRGICO: se competencia foi passada, preserva linhas de outros meses.
-  // Caso contrário (chamada manual sem argumento), reconstrói tudo.
-  if (competencia) {
-    // Normaliza usando parseCompetencia_ para garantir formato YYYY-MM consistente
-    const compTarget = parseCompetencia_(competencia);
-    const aggSheet   = SpreadsheetApp.getActive().getSheetByName(CFG.SHEETS.AGG);
-    const lastRow    = aggSheet.getLastRow();
-    if (lastRow >= 2) {
-      const lastCol    = aggSheet.getLastColumn();
-      const existRows  = aggSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-      const kept = existRows.filter(r => {
-        const c = parseCompetencia_(r[0]);
-        return c && c !== compTarget;   // preserva tudo que NÃO é a competência atual
-      });
-      // Normaliza colunas das linhas preservadas para o schema atual (headers.length).
-      // Linhas antigas podem ter menos colunas (ex: antes de adicionar devolucao_limpeza).
-      // Preenche colunas faltantes com "" para evitar erro de dimensão no setValues.
-      const n = headers.length;
-      const keptNorm = kept.map(r => {
-        if (r.length === n) return r;
-        const row = r.slice(0, n);
-        while (row.length < n) row.push("");
-        return row;
-      });
-      aggSheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
-      const allRows = [...keptNorm, ...out];
-      allRows.sort((x,y) =>
-        (String(x[0])+String(x[3])+String(x[4])).localeCompare(
-         String(y[0])+String(y[3])+String(y[4]))
-      );
-      if (allRows.length > 0) {
-        aggSheet.getRange(2, 1, allRows.length, n).setValues(allRows);
-      }
-    } else {
-      // Aba vazia — escreve cabeçalho + novas linhas
-      writeTableFull_(CFG.SHEETS.AGG, headers, out);
-    }
-  } else {
-    // Sem competencia: reconstrói tudo (usado em reconstrução manual completa)
-    writeTableFull_(CFG.SHEETS.AGG, headers, out);
-  }
+  // Sempre sobrescreve o AGG completo a partir dos dados acumulados de TODAS as FACTs.
+  // As FACTs já estão corretas antes desta chamada (removeRowsByCompetencia_ + reingestão),
+  // então out reflete o estado real de todos os meses — sem necessidade de merge com
+  // linhas antigas (que era a causa original das duplicatas).
+  writeTableFull_(CFG.SHEETS.AGG, headers, out);
 
   // Formatação numérica
   const sh = SpreadsheetApp.getActive().getSheetByName(CFG.SHEETS.AGG);

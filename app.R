@@ -45,6 +45,9 @@ only_digits <- function(x) gsub("[^0-9]", "", as.character(x %||% ""))
 
 ADMIN_USER <- Sys.getenv("BSBSTAY_ADMIN_USER", "admin")
 ADMIN_PASS <- Sys.getenv("BSBSTAY_ADMIN_PASS", "bsbstay123")
+if (!nzchar(ADMIN_PASS)) {
+  message("[SEGURANÇA] BSBSTAY_ADMIN_PASS não configurada — acesso admin desativado.")
+}
 
 # ── Registro de usuários (carregado uma vez) ──────────────────
 auth_registry <- tryCatch({
@@ -274,13 +277,15 @@ ui <- uiOutput("root_ui")
 server <- function(input, output, session) {
   
   rv <- reactiveValues(
-    tela       = "login",   # "login" | "cadastro" | "app" | "alterar_senha"
-    auth_ok    = FALSE,
-    role       = NULL,
-    doc        = NULL,
-    doc_type   = NULL,
-    owner_id   = NULL,
-    owner_name = NULL
+    tela           = "login",   # "login" | "cadastro" | "app" | "alterar_senha"
+    auth_ok        = FALSE,
+    role           = NULL,
+    doc            = NULL,
+    doc_type       = NULL,
+    owner_id       = NULL,
+    owner_name     = NULL,
+    login_attempts = 0L,
+    lockout_until  = NULL
   )
   
   child_env <- reactiveVal(NULL)
@@ -313,9 +318,17 @@ server <- function(input, output, session) {
   output$login_msg <- renderUI({ NULL })
   
   observeEvent(input$btn_login, {
+    # ── Rate limiting ────────────────────────────────────────
+    if (!is.null(rv$lockout_until) && Sys.time() < rv$lockout_until) {
+      mins_left <- ceiling(as.numeric(difftime(rv$lockout_until, Sys.time(), units = "mins")))
+      output$login_msg <- renderUI(div(class="auth-err",
+        paste0("⛔ Muitas tentativas incorretas. Aguarde ", mins_left, " minuto(s).")))
+      return()
+    }
+
     doc_raw  <- trim_na(input$login_doc)
     pass_raw <- trimws(input$login_pass %||% "")
-    
+
     # Validação básica
     if (is.na(doc_raw) || !nzchar(doc_raw)) {
       output$login_msg <- renderUI(div(class="auth-err", "⚠ Informe seu CPF ou CNPJ."))
@@ -325,9 +338,10 @@ server <- function(input, output, session) {
       output$login_msg <- renderUI(div(class="auth-err", "⚠ Informe sua senha."))
       return()
     }
-    
+
     # ── Login admin ──────────────────────────────────────────
-    if (identical(doc_raw, ADMIN_USER) && identical(pass_raw, ADMIN_PASS)) {
+    if (nzchar(ADMIN_PASS) && identical(doc_raw, ADMIN_USER) && identical(pass_raw, ADMIN_PASS)) {
+      rv$login_attempts <- 0L; rv$lockout_until <- NULL
       .fazer_login_admin(rv, session, child_env)
       return()
     }
@@ -346,7 +360,7 @@ server <- function(input, output, session) {
                                        "⚠ Documento não encontrado. Verifique a pontuação ou entre em contato com a BSBStay."))
       return()
     }
-    
+
     # Verificar se tem senha cadastrada
     tem_senha <- tryCatch(auth_tem_senha(doc_raw), error = function(e) FALSE)
     if (!tem_senha) {
@@ -354,15 +368,25 @@ server <- function(input, output, session) {
                                        "⚠ Você ainda não criou uma senha. Clique em \"Primeiro acesso\" abaixo."))
       return()
     }
-    
+
     # Verificar senha
     ok <- tryCatch(auth_check_senha(doc_raw, pass_raw), error = function(e) FALSE)
     if (!ok) {
-      output$login_msg <- renderUI(div(class="auth-err", "⚠ Senha incorreta."))
+      rv$login_attempts <- rv$login_attempts + 1L
+      if (rv$login_attempts >= 5L) {
+        rv$lockout_until  <- Sys.time() + 5 * 60
+        output$login_msg <- renderUI(div(class="auth-err",
+          "⛔ Muitas tentativas incorretas. Acesso bloqueado por 5 minutos."))
+      } else {
+        restantes <- 5L - rv$login_attempts
+        output$login_msg <- renderUI(div(class="auth-err",
+          paste0("⚠ Senha incorreta. ", restantes, " tentativa(s) restante(s).")))
+      }
       return()
     }
-    
-    # Sucesso
+
+    # Sucesso — reseta contador
+    rv$login_attempts <- 0L; rv$lockout_until <- NULL
     .fazer_login_owner(rv, session, child_env, hit)
   }, ignoreInit = TRUE)
   
@@ -432,11 +456,6 @@ server <- function(input, output, session) {
     output$cadastro_msg <- renderUI(div(class="auth-ok",
                                         paste0("✅ Senha criada com sucesso! Bem-vindo(a), ", nome, ". Faça login agora.")))
     
-    # Redirecionar para login após 2 segundos
-    shinyjs_delay_nav <- function() {
-      invalidateLater(2000, session)
-      observeEvent(TRUE, { rv$tela <- "login" }, once = TRUE, ignoreInit = FALSE)
-    }
     later::later(function() { rv$tela <- "login" }, delay = 2)
     
   }, ignoreInit = TRUE)

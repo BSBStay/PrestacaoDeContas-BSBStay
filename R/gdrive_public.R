@@ -137,41 +137,34 @@ urls_para_file_id <- function(file_id) {
 # ── Download binário base R com retry ─────────────────────────
 baixar_url_base <- function(urls, destino, timeout_s = 120) {
   metodos <- unique(c("libcurl", "auto", "curl", if (.Platform$OS.type == "windows") "wininet"))
-  
+
+  old_to <- getOption("timeout")
+  options(timeout = timeout_s)
+  on.exit(options(timeout = old_to), add = TRUE)
+
   for (url in urls) {
     for (met in metodos) {
       ok <- tryCatch({
         tmp <- tempfile(fileext = ".xlsx")
-        
-        old_to <- getOption("timeout")
-        options(timeout = timeout_s)
-        on.exit(options(timeout = old_to), add = TRUE)
-        
+        on.exit(unlink(tmp), add = TRUE)
+
         st <- utils::download.file(url, tmp, mode = "wb", quiet = TRUE, method = met)
-        if (st != 0) {
-          unlink(tmp)
-          return(NULL)
-        }
-        
-        sig <- readBin(tmp, raw(), n = 4)
+        if (st != 0) return(NULL)
+
+        sig    <- readBin(tmp, raw(), n = 4)
         is_zip  <- identical(sig, as.raw(c(0x50, 0x4B, 0x03, 0x04)))
         is_ole2 <- identical(sig, as.raw(c(0xD0, 0xCF, 0x11, 0xE0)))
-        
-        if (!is_zip && !is_ole2) {
-          unlink(tmp)
-          return(NULL)
-        }
-        
+        if (!is_zip && !is_ole2) return(NULL)
+
         dir.create(dirname(destino), recursive = TRUE, showWarnings = FALSE)
         file.copy(tmp, destino, overwrite = TRUE)
-        unlink(tmp)
         TRUE
       }, error = function(e) NULL)
-      
+
       if (isTRUE(ok)) return(TRUE)
     }
   }
-  
+
   FALSE
 }
 
@@ -664,29 +657,27 @@ montar_objeto_app_sqlite <- function(con) {
         dplyr::left_join(pid_map, by = "property_id")
       
       if (nrow(res_clean) == 0) return(data.frame())
-      
-      dias_list <- lapply(seq_len(nrow(res_clean)), function(i) {
-        r <- res_clean[i, ]
-        
-        datas <- tryCatch(
-          seq.Date(r$checkin, r$checkout - 1, by = "day"),
-          error = function(e) as.Date(character(0))
-        )
-        
-        if (length(datas) == 0) return(NULL)
-        
-        data.frame(
-          cpf_cnpj        = r$cpf_cnpj %||% NA_character_,
-          property_id     = r$property_id,
-          apto_original   = r$imovel_nome %||% NA_character_,
-          data            = datas,
-          valor           = r$valor,
-          ocupado         = TRUE,
-          stringsAsFactors = FALSE
-        )
-      })
-      
-      do.call(rbind, Filter(Negate(is.null), dias_list))
+
+      # Vetorizado: expande todas as reservas de uma vez sem lapply row-by-row
+      n_nights <- as.integer(res_clean$checkout - res_clean$checkin)
+      valid    <- n_nights > 0
+      if (!any(valid)) return(data.frame())
+
+      res_v    <- res_clean[valid, ]
+      n_v      <- n_nights[valid]
+      starts   <- as.integer(res_v$checkin)
+      all_int  <- unlist(Map(seq.int, starts, starts + n_v - 1L), use.names = FALSE)
+      idx      <- rep(seq_len(nrow(res_v)), n_v)
+
+      data.frame(
+        cpf_cnpj      = res_v$cpf_cnpj[idx]      %||% NA_character_,
+        property_id   = res_v$property_id[idx],
+        apto_original = res_v$imovel_nome[idx]    %||% NA_character_,
+        data          = structure(all_int, class = "Date"),
+        valor         = res_v$valor[idx],
+        ocupado       = TRUE,
+        stringsAsFactors = FALSE
+      )
     } else {
       data.frame()
     }
@@ -1053,26 +1044,23 @@ auth_tem_senha <- function(cpf_cnpj, con = NULL) {
   isTRUE(res$n[1] > 0)
 }
 
-# Cadastra ou atualiza senha do proprietário
+# Cadastra ou atualiza senha do proprietário (UPSERT atômico — sem race condition)
 auth_set_senha <- function(cpf_cnpj, senha, con = NULL) {
   own <- is.null(con)
   if (own) con <- sqlite_connect()
   on.exit(if (own) DBI::dbDisconnect(con), add = TRUE)
-  
+
   auth_ensure_table(con)
   cpf_norm <- gsub("[^0-9]", "", as.character(cpf_cnpj))
   hash     <- auth_hash(senha, cpf_norm)
   agora    <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-  
-  if (auth_tem_senha(cpf_norm, con)) {
-    DBI::dbExecute(con,
-                   "UPDATE auth_senhas SET senha_hash = ?, alterado_em = ? WHERE cpf_cnpj = ?",
-                   params = list(hash, agora, cpf_norm))
-  } else {
-    DBI::dbExecute(con,
-                   "INSERT INTO auth_senhas (cpf_cnpj, senha_hash, criado_em, alterado_em) VALUES (?, ?, ?, ?)",
-                   params = list(cpf_norm, hash, agora, agora))
-  }
+
+  DBI::dbExecute(con,
+    "INSERT INTO auth_senhas (cpf_cnpj, senha_hash, criado_em, alterado_em)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(cpf_cnpj) DO UPDATE SET senha_hash = excluded.senha_hash,
+                                         alterado_em = excluded.alterado_em",
+    params = list(cpf_norm, hash, agora, agora))
   invisible(TRUE)
 }
 

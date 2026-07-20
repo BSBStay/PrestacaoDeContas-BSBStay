@@ -11,7 +11,7 @@ options(
   shiny.host            = "0.0.0.0",
   shiny.port            = as.integer(Sys.getenv("PORT", "3838")),
   shiny.maxRequestSize  = 50 * 1024^2,
-  shiny.sanitize.errors = FALSE
+  shiny.sanitize.errors = TRUE
 )
 
 # ── 2. Paths ──────────────────────────────────────────────────

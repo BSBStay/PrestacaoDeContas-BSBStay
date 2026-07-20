@@ -1,25 +1,4 @@
 # ============================================================
-# BSB.STAY — Extrato do Proprietário
-# app.R — v3.0: Análise Completa de Despesas, Custos,
-#               Ordens de Serviço e Diária entre Check-ins
-#
-# Novidades v3.0 (sobre v2.0):
-#   - Seção "Operacional": Despesas | Custos por Apt. | OS
-#   - Seção "Análise da Diária": valor entre check-ins + KPIs
-#   - Todas as seções seguem os filtros de mês e imóvel
-# ============================================================
-
-# ── Bootstrap Render/Docker ───────────────────────────────────
-options(
-  shiny.host = "0.0.0.0",
-  shiny.port = as.integer(Sys.getenv("PORT", "3838"))
-)
-
-APP_ROOT <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork = FALSE)
-dir.create(file.path(APP_ROOT, "data", "cache"), recursive = TRUE, showWarnings = FALSE)
-dir.create(file.path(APP_ROOT, "data", "raw"), recursive = TRUE, showWarnings = FALSE)
-
-# ============================================================
 # app_public.R — Extrato do Proprietário autenticado por sessão
 # ============================================================
 
@@ -37,16 +16,6 @@ APP_ROOT <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork 
 
 if (!exists("carregar_dados_app")) {
   source(file.path(APP_ROOT, "R", "gdrive_public.R"), local = FALSE)
-}
-
-# Usa APP_DATA_GLOBAL pré-aquecido pelo run.R (não bloqueia a porta).
-# Fallback: tenta carregar localmente se o global ainda não estiver pronto.
-# APP_DATA_GLOBAL é populado pelo run.R (Etapa A = SQLite local, Etapa B = Drive).
-# Nunca fazemos download bloqueante aqui — o login ficaria travado.
-APP_DATA <- if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
-  APP_DATA_GLOBAL
-} else {
-  structure(list(), erro_msg = "Dados ainda carregando, aguarde...")
 }
 
 `%||%` <- function(x, y) {
@@ -436,16 +405,13 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
 server <- function(input, output, session) {
   
   rv <- reactiveValues(
-    # APP_DATA_GLOBAL já está pronto (Etapa A do run.R carregou do SQLite).
-    # Se ainda estiver vazio (fresh deploy sem SQLite), o polling de 3s
-    # detecta a conclusão da Etapa B e atualiza rv$app_data automaticamente.
-    app_data    = if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
+    # APP_DATA_GLOBAL pré-aquecido pelo run.R (Etapa A = SQLite, Etapa B = Drive).
+    # Se ainda vazio (fresh deploy sem SQLite), o polling de 2s detecta a
+    # conclusão da Etapa B e atualiza rv$app_data automaticamente.
+    app_data    = if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0)
       APP_DATA_GLOBAL
-    } else if (exists("APP_DATA") && length(APP_DATA) > 0) {
-      APP_DATA
-    } else {
-      structure(list(), erro_msg = "Dados ainda carregando, aguarde...")
-    },
+    else
+      structure(list(), erro_msg = "Dados ainda carregando, aguarde..."),
     syncing     = FALSE,
     sync_status = "ok",
     last_sync   = {
@@ -548,8 +514,6 @@ server <- function(input, output, session) {
       df <- df |> dplyr::filter(imovel_nome == input$imovel)
     df
   })
-  
-  # ── Sync ──────────────────────────────────────────────────────
   
   # ── Sync ──────────────────────────────────────────────────────
   output$sync_bar <- renderUI({

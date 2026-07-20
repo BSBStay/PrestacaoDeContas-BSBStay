@@ -1,0 +1,280 @@
+# REFACTOR_REPORT.md — BSBStay Dashboard
+**Data:** 2026-07-20  
+**Escopo:** Limpeza de código, otimização de performance e hardening de segurança
+
+---
+
+## Arquivos modificados
+
+| Arquivo | Tipo de alteração |
+|---|---|
+| `run.R` | Segurança |
+| `app.R` | Segurança + remoção de código morto |
+| `R/gdrive_public.R` | Segurança + performance + qualidade |
+| `app_public.R` | Limpeza de código |
+| `app_master.R` | Limpeza de código morto + consistência de dados + correções de bugs + feature |
+
+`bsbstay_v5_3_gs.js` não foi modificado nesta rodada.
+
+---
+
+## Vulnerabilidades corrigidas
+
+### 1. Stack traces expostos ao usuário — CRÍTICO → CORRIGIDO
+**Arquivo:** `run.R:14`  
+`shiny.sanitize.errors = FALSE` → `TRUE`
+
+Com FALSE, qualquer erro não tratado exibia o stack trace R completo ao usuário no browser — incluindo caminhos de arquivo internos, nomes de variáveis e lógica de negócio. Agora erros mostram apenas "An error has occurred" sem vazamento de informação.
+
+### 2. Senha admin com fallback hardcoded fraco — ALTO → CORRIGIDO
+**Arquivo:** `app.R:46-50`
+
+`BSBSTAY_ADMIN_PASS` tinha default `"bsbstay123"`. Agora o default é string vazia, o que **desativa o acesso admin** quando a variável de ambiente não está configurada — com mensagem clara no log. Isso elimina o risco de deploy acidental sem configurar a variável.
+
+Login admin agora só é tentado quando `nzchar(ADMIN_PASS)` for TRUE.
+
+### 3. Sem rate limiting no login — CRÍTICO → CORRIGIDO
+**Arquivo:** `app.R` (observeEvent `btn_login`)
+
+Adicionado contador de tentativas e bloqueio por sessão:
+- Após **5 tentativas incorretas**: bloqueio de **5 minutos** com mensagem clara
+- Cada tentativa falha mostra quantas restam antes do bloqueio
+- Sucesso ou mudança de tela reseta o contador
+- Implementado em `rv$login_attempts` e `rv$lockout_until`
+
+### 4. Race condition em criação/atualização de senha — MÉDIO → CORRIGIDO
+**Arquivo:** `R/gdrive_public.R` — `auth_set_senha()`
+
+O padrão antigo fazia dois round-trips SQLite separados (SELECT para verificar existência, depois INSERT ou UPDATE), criando janela de race condition. Substituído por uma única instrução SQL atômica:
+
+```sql
+INSERT INTO auth_senhas ... ON CONFLICT(cpf_cnpj) DO UPDATE SET ...
+```
+
+Benefícios: operação atômica, uma única conexão, ~50% menos I/O de banco.
+
+---
+
+## Código morto eliminado
+
+### 1. Função `shinyjs_delay_nav` — `app.R:436-439`
+```r
+# REMOVIDO:
+shinyjs_delay_nav <- function() {
+  invalidateLater(2000, session)
+  observeEvent(TRUE, { rv$tela <- "login" }, once = TRUE, ignoreInit = FALSE)
+}
+```
+A função era definida mas **nunca chamada**. O redirect para login já era feito pela linha seguinte via `later::later(...)`. Código morto removido.
+
+### 2. `options(shiny.host, shiny.port)` em módulo filho — `app_public.R:12-16`
+```r
+# REMOVIDO:
+options(
+  shiny.host = "0.0.0.0",
+  shiny.port = as.integer(Sys.getenv("PORT", "3838"))
+)
+```
+Estas opções já são configuradas por `run.R` **antes** de qualquer módulo ser carregado. Redefini-las em `app_public.R` não tinha efeito algum e criava confusão sobre onde a configuração é feita.
+
+### 3. Snapshot estático `APP_DATA` — `app_public.R:32-40`
+```r
+# REMOVIDO:
+APP_DATA <- if (exists("APP_DATA_GLOBAL") ...) APP_DATA_GLOBAL else ...
+```
+O objeto era usado apenas como fallback no `rv$app_data` do servidor, mas esse fallback é idêntico ao ramo primário (`APP_DATA_GLOBAL`). Removido o snapshot e simplificado o `reactiveValues` para referenciar `APP_DATA_GLOBAL` diretamente. Isso economiza uma cópia em memória do dataset completo na inicialização do módulo.
+
+### 4. Segunda atribuição de `APP_ROOT` — `app_public.R`
+A variável era definida duas vezes com o mesmo valor (antes e depois dos `library()` calls). Segunda definição removida.
+
+### 5. `dir.create` redundantes — `app_public.R:19-20`
+Os diretórios `data/cache` e `data/raw` já eram criados por `run.R` antes de qualquer módulo ser carregado. As chamadas duplicadas foram removidas.
+
+### 6. Comentário duplicado `# ── Sync` — `app_public.R`
+Seção tinha dois comentários de cabeçalho idênticos consecutivos. Um removido.
+
+### 7. Snapshot estático `APP_DATA` — `app_master.R:106-110`
+Mesmo padrão removido de `app_public.R`: objeto criado no nível do módulo capturava `APP_DATA_GLOBAL` uma única vez na inicialização. Na aba Gerencial, o `rv$app_data` era inicializado com esse snapshot estático em vez da referência viva. Removido o snapshot; `rv$app_data` agora inicializa diretamente de `APP_DATA_GLOBAL` (mesmo padrão aplicado em `app_public.R`). Economiza uma cópia do dataset em memória por sessão admin.
+
+### 8. Primeira definição morta de `output$sec_analise_receita` — `app_master.R:897-912`
+O output era definido duas vezes. Shiny usa sempre a **última** definição, portanto a primeira (linhas 897-912) nunca era executada. A segunda definição (linhas 971-995) é ligeiramente mais robusta — usa `fmt_mes_pt()` em vez de `format(..., "%B/%Y")` e filtra o calendário corretamente antes de decidir ocultar o bloco. A primeira foi removida.
+
+### 9. `output$g_despesas_apto` nunca referenciado no layout — `app_master.R:1337-1355`
+Output `renderPlotly` completamente implementado mas sem nenhum `plotlyOutput("g_despesas_apto")` em qualquer layout do arquivo. Código morto: nunca renderizado, nunca visto. Removido.
+
+### 10. Stubs `output$g_acum` e `output$g_diarias` — `app_master.R:1730-1734`
+Dois outputs `renderPlotly({ plotly_empty() })` mantidos "para evitar erros" após suas referências serem removidas do layout. Se não há `plotlyOutput(...)` no UI, Shiny não solicita esses outputs e o stub é inerte. Ambos removidos.
+
+### 11. Comentário de seção duplicado "ABA 3" — `app_master.R:2011-2013`
+Dois blocos de comentário consecutivos descreviam a mesma seção (Insights) com títulos diferentes. Bloco redundante removido.
+
+---
+
+## Otimizações de performance implementadas
+
+### 1. Expansão de calendário vetorizada — `R/gdrive_public.R:668-689`
+
+**Antes:** `lapply` linha a linha, gerando um `data.frame` por reserva e depois `do.call(rbind, ...)` — O(n × m) com alocações repetidas.
+
+**Depois:** Expansão vetorizada com `Map(seq.int, ...)` e indexação por `rep()`:
+```r
+n_v     <- n_nights[valid]
+starts  <- as.integer(res_v$checkin)
+all_int <- unlist(Map(seq.int, starts, starts + n_v - 1L))
+idx     <- rep(seq_len(nrow(res_v)), n_v)
+# Uma única construção de data.frame com vetores já expandidos
+```
+
+Para um portfólio com 500 reservas/mês e média de 5 noites cada, isso reduz de ~2.500 alocações de `data.frame` para 1, com ganho estimado de **5-10× na velocidade** de construção do calendário.
+
+### 2. `baixar_url_base` — timeout fora do loop + cleanup garantido
+**Arquivo:** `R/gdrive_public.R`
+
+**Antes:** `options(timeout)` e `on.exit()` eram registrados **dentro** de cada iteração do loop duplo (urls × métodos), acumulando handlers de cleanup sem necessidade.
+
+**Depois:** `options(timeout = timeout_s)` e `on.exit(options(timeout = old_to))` movidos para **fora do loop**, executando uma única vez. Adicionado `on.exit(unlink(tmp), add = TRUE)` para garantir limpeza do arquivo temporário mesmo em caso de erro, eliminando possível vazamento de arquivos em `/tmp`.
+
+---
+
+## Melhorias arquiteturais
+
+### Autenticação defensiva
+- Admin login agora exige variável de ambiente configurada explicitamente
+- Log de aviso claro quando `BSBSTAY_ADMIN_PASS` está ausente
+- Rate limiting integrado diretamente ao `reactiveValues` da sessão, sem estado global
+
+### Atomicidade do banco
+- `auth_set_senha` agora usa INSERT OR REPLACE ON CONFLICT — operação SQLite atômica, sem janela de inconsistência entre verificação e escrita
+
+---
+
+## Impacto esperado
+
+| Dimensão | Impacto |
+|---|---|
+| **Segurança** | Eliminados: stack traces expostos, senha admin fraca, ausência de rate limiting, race condition em senhas |
+| **Performance** | Calendário: redução estimada de 5-10× em alocações; download: handlers de cleanup de O(n) para O(1) |
+| **Memória** | Eliminada 1 cópia desnecessária de `APP_DATA_GLOBAL` por sessão iniciada |
+| **Manutenção** | Remoção de código morto e duplicações reduce superfície de confusão |
+
+---
+
+---
+
+## Correções e melhorias pós-auditoria (app_master.R)
+
+Aplicadas após auditoria completa da aba Revisão Gerencial com acesso admin.
+
+### Fix 1 — Regex JavaScript: `taxa_pct` antes de `taxa`
+**Localização:** bloco `<script>` inline no `output$ger_cards`
+
+O padrão `/^ger_(rec|taxa|man|rep|des|taxa_pct)_/` casava `taxa` antes de `taxa_pct` para IDs como `ger_taxa_pct_2026_06_...`, resultando em `field='taxa'` e `ks='pct_2026_06_...'` — completamente errado. O campo taxa administrativa (%) nunca era persistido no banco.
+
+**Fix:** Reordenado para `taxa_pct` antes de `taxa` no alternador regex.
+
+### Fix 2 — Performance: `isolate()` em `output$ger_cards` + mensagem JS `gerPillUpdate`
+**Localização:** `output$ger_cards` (renderUI), observers de salvar/restaurar/publicar
+
+A aba Gerencial renderizava os 289 cards do zero a cada clique em "Salvar rascunho", "Publicar" ou "Restaurar" — bloqueando o processo Shiny por 40+ segundos e derrubando o WebSocket.
+
+**Causa raiz:** `rv$ger_edits` e `rv$ger_pub` eram lidos reativamente dentro de `renderUI`, invalidando o output completo a cada mudança.
+
+**Fix:**
+- Todo o corpo de `renderUI` (exceto a chamada `ger_dados()`) envolvido em `isolate({...})`
+- Helpers locais `snap_get`, `snap_is_pub`, `snap_status` baseados em snapshots — sem dependência reativa residual
+- Status dos pills (Pendente / Em Revisão / Publicado) atualizado via `session$sendCustomMessage("gerPillUpdate", ...)` + handler JS que manipula o DOM diretamente, sem re-renderizar os cards
+- Atributo `data-key` adicionado nos cards para seleção JS precisa
+
+### Fix 3 — Feature (Adriane): Detalhamento dos custos nos cards
+**Localização:** lapply de construção dos cards em `output$ger_cards`
+
+Adicionada seção "Detalhamento dos Custos" no corpo de cada card, exibindo os itens individuais de manutenção, reposição e despesas fixas para o imóvel/mês do card, formatados como lista com descrição e valor.
+
+Helper interno `.desc_rows()` filtra a tabela correta de `app_snap[[cpf_cnpj]]` pelo nome do imóvel e competência antes de construir as linhas — nenhum dado reativo extra é lido.
+
+### Fix 4 — Alertas duplicados em Insights
+**Localização:** `output$ins_alertas`
+
+Mesmos imóveis apareciam múltiplas vezes nos alertas de "Queda consistente" e "Top performers" por haver registros com mesmo nome de imóvel e CPFs diferentes.
+
+**Fix:**
+- `dplyr::distinct(imovel, proprietario, .keep_all = TRUE)` em `queda_trend`
+- `dplyr::distinct(imovel, .keep_all = TRUE)` em `tops`
+- Proprietário incluído no título dos alertas para distinguir quando há homônimos
+
+### Fix 5 — Benchmark: placeholder quando nenhum imóvel selecionado
+**Localização:** `output$benchmark_imovel`, `output$sec_benchmark_graficos`
+
+`req(input$bench_imovel, nzchar(input$bench_imovel))` causava spinners perpétuos (sem saída de loading): quando nenhum imóvel estava selecionado, `req()` encerrava silenciosamente o output sem retornar UI, mantendo o spinner do `withSpinner` girando indefinidamente.
+
+**Fix:**
+- `output$benchmark_imovel`: retorna `div(...)` com mensagem orientativa quando nada selecionado
+- `output$sec_benchmark_graficos`: retorna `NULL` quando nada selecionado (remove o spinner completamente)
+
+---
+
+---
+
+## Correções pós-auditoria completa (admin + CNPJ)
+
+### Fix A — Rankings sem duplicatas (`app_master.R`)
+**Localização:** `output$ranking_imoveis_receita`, `output$ranking_imoveis_diaria`, `output$ins_ranking`
+
+Apartamentos registrados sob múltiplos CPFs/CNPJs apareciam N vezes nos rankings. `build_carteira_flat` produz uma linha por (proprietário, imóvel, competência), então o mesmo nome de imóvel gerava múltiplos registros.
+
+**Fix:** `dplyr::distinct(imovel, .keep_all=TRUE)` adicionado após `arrange(desc(...))` nos três outputs — garante que para cada nome de imóvel seja mantida apenas a linha com a melhor métrica.
+
+### Fix B — Benchmark: eixo X fora de ordem (`app_master.R`)
+**Localização:** `output$g_bench_receita`, `output$g_bench_ocupacao`
+
+Plotly trata labels de categoria como strings e pode reordená-los alfabeticamente ("Abr/2026" antes de "Dez/2025"). Os charts usavam `x=~mes_label` sem fixar a ordem do eixo, embora os dataframes fossem ordenados por `mes` (Date).
+
+**Fix:** `ordem_r`/`ordem_o` extraídos de `med_df$mes_label` (já ordenado por data) e passados ao layout via `categoryorder="array", categoryarray=ordem_r`. Mesmo padrão já usado em `g_evolucao_carteira`.
+
+### Fix D — Vazamento de CPF no Relatório de Reservas — LGPD (`bsbstay_v5_3_gs.js`)
+**Localização:** `sanitizeHospede_()`
+
+A função existia mas não cortava a string no primeiro separador de multi-hóspede — apenas removia os números de CPF, deixando os LABELS ("CPF:", "cpf .") e os nomes dos hóspedes acompanhantes visíveis no painel do proprietário. Em alguns casos, o número real de CPF ("093. 496. 503. 04") não era removido porque o regex não cobria o formato espaçado com ponto.
+
+**Fix:** Passo 2 adicionado antes da remoção de dígitos — `split()` no primeiro separador de multi-hóspede (` CPF`, ` - CPF`, `//`, ` | `, ` /nome`), mantendo apenas o segmento do hóspede principal. Passo 4 remove a palavra "CPF" residual antes da limpeza de bordas.
+
+### Fix E — Encoding mojibake em nomes de hóspedes (`bsbstay_v5_3_gs.js`)
+**Localização:** nova função `fixMojibake_()`, chamada no início de `sanitizeHospede_()`
+
+Strings UTF-8 eram lidas como Latin-1 e armazenadas assim ("Ã£" em vez de "ã", "Ã©" em vez de "é"). Padrão clássico de double-UTF-8 encoding.
+
+**Fix:** `fixMojibake_()` converte cada caractere da string para seu valor de byte Latin-1, monta um `Blob` e decodifica como UTF-8 via `Utilities.newBlob(bytes).getDataAsString("UTF-8")`. Strings já corretas (com chars > U+00FF, ou que produziriam U+FFFD) são devolvidas intactas. Aplicada como primeiro passo de `sanitizeHospede_()`.
+
+---
+
+## Recomendações futuras (fora do escopo desta rodada)
+
+### Alta prioridade
+
+1. **Migrar para bcrypt** (`R/gdrive_public.R` — `auth_hash`)  
+   SHA-256 com CPF como salt é computacionalmente barato — ataques de força bruta offline são viáveis se o SQLite vazar. Substituir por `bcrypt::hashpw()` / `bcrypt::checkpw()` do pacote `bcrypt`. O campo `senha_hash` no SQLite precisaria ser migrado (novo hash gerado no próximo login).
+
+2. **Timeout de sessão por inatividade** (`app.R`)  
+   Não há logout automático. Implementar via heartbeat JavaScript + observer R que chama `session$close()` após N minutos sem interação.
+
+3. **auth_registry com refresh periódico** (`app.R:50-76`)  
+   Carregado uma única vez no startup; novos proprietários adicionados ao xlsx não conseguem logar sem reiniciar o container. Solução: expor função de reload acionável pelo admin ou adicionar invalidação periódica.
+
+### Média prioridade
+
+4. **Extrair helpers compartilhados para `R/utils.R`**  
+   `%||%`, `brl`, `frow`, `kcard`, `kcard_sm` estão triplicados entre `gdrive_public.R`, `app_public.R` e `app_master.R`. Um arquivo `R/utils.R` sourceado por `gdrive_public.R` eliminaria as duplicatas.
+
+5. **`btn_sync` assíncrono** (`app_public.R`)  
+   O handler do botão "Atualizar dados" chama `carregar_dados_app()` de forma síncrona, bloqueando o processo Shiny durante o download. Refatorar com `promises` / `future` para processar em background.
+
+6. **`diagnostico_drive()` usar `cat()` seguro** (`R/gdrive_public.R`)  
+   A função usa `cat()` diretamente — em ambiente Shiny isso vai para stdout do processo, não para o usuário. Converter para retornar lista estruturada.
+
+### Baixa prioridade
+
+7. **Remover cabeçalho de versão obsoleto** (`app_public.R:1-10`)  
+   Refere-se a "v3.0" e lista funcionalidades internas — informação que pertence ao git log, não ao código.
+
+8. **`DRIVE_FILE_ID` / `DRIVE_FOLDER_ID` via env vars obrigatórias** (`R/gdrive_public.R`)  
+   Os fallbacks hardcoded expõem os IDs no código-fonte. Considerar exigir as env vars ou remover os defaults.

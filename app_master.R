@@ -101,13 +101,7 @@ insight_card <- function(ico, titulo, corpo, cor = "blue") {
           div(class = "insight-text", corpo)))
 }
 
-# ── Carregamento inicial ────────────────────────────────────────
 # APP_DATA_GLOBAL populado pelo run.R. Sem download bloqueante aqui.
-APP_DATA <- if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0) {
-  APP_DATA_GLOBAL
-} else {
-  structure(list(), erro_msg = "Dados ainda carregando, aguarde...")
-}
 
 # Extrai dados flat de todos os proprietários (para aba Carteira)
 build_carteira_flat <- function(app_data) {
@@ -483,7 +477,10 @@ label{font-size:11px!important;font-weight:700!important;color:#6b7280!important
 server <- function(input, output, session) {
   
   rv <- reactiveValues(
-    app_data    = APP_DATA,
+    app_data    = if (exists("APP_DATA_GLOBAL") && length(APP_DATA_GLOBAL) > 0)
+      APP_DATA_GLOBAL
+    else
+      structure(list(), erro_msg = "Dados ainda carregando, aguarde..."),
     aba         = "proprietario",
     op_aba      = "despesas",
     ts_data     = -1,
@@ -893,23 +890,6 @@ server <- function(input, output, session) {
         }))
   })
   
-  # ── Análise receita (gráfico diária/dia) ────────────────────
-  output$sec_analise_receita <- renderUI({
-    d <- dados(); req(d, input$mes_sel)
-    iid <- if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
-      input$imovel else if (length(d$imoveis_ids) > 0) d$imoveis_ids[[1]] else return(NULL)
-    cal <- d$calendario
-    if (is.null(cal) || nrow(cal) == 0) return(NULL)
-    if (nrow(dplyr::filter(cal, (apto_original==iid | property_id==iid),
-                           substr(as.character(data),1,7)==input$mes_sel)) == 0) return(NULL)
-    mes_lbl <- format(suppressWarnings(as.Date(paste0(input$mes_sel,"-01"))), "%B/%Y")
-    tagList(
-      div(class="sec","ANÁLISE DE RECEITA"),
-      div(class="recv-wrap",
-          div(class="recv-hdr", div(class="recv-ttl","Valor da Diária por Dia"),
-              span(class="badge badge-blue", mes_lbl)),
-          shinycssloaders::withSpinner(plotlyOutput("g_diaria_dia",height="220px"),type=4,color="#1a6ef7")))
-  })
   output$g_diaria_dia <- renderPlotly({
     d <- dados(); req(d, input$mes_sel)
     iid <- if (!is.null(input$imovel) && nzchar(input$imovel) && input$imovel != "all")
@@ -1334,26 +1314,6 @@ server <- function(input, output, session) {
       config(displayModeBar=FALSE)
   })
   
-  # ── Gráfico despesas por apartamento (barras) ─────────────────
-  output$g_despesas_apto <- renderPlotly({
-    des <- despesas_fil()
-    validate(need(nrow(des) > 0 && "imovel_nome" %in% names(des), "Sem dados de despesas."))
-    df <- des |>
-      dplyr::group_by(imovel_nome) |>
-      dplyr::summarise(total = sum(valor, na.rm = TRUE), .groups = "drop") |>
-      dplyr::arrange(total)
-    plot_ly(df, x = ~total, y = ~imovel_nome, type = "bar", orientation = "h",
-            marker = list(color = "#d97706",
-                          line = list(color = "transparent")),
-            hovertemplate = "%{y}<br>R$ %{x:,.0f}<extra></extra>") |>
-      layout(paper_bgcolor="transparent", plot_bgcolor="transparent",
-             xaxis=list(showgrid=TRUE,gridcolor="#f3f6f9",zeroline=FALSE,
-                        tickprefix="R$ ",tickfont=list(size=10),title=""),
-             yaxis=list(showgrid=FALSE,zeroline=FALSE,tickfont=list(size=10),title=""),
-             margin=list(l=10,r=12,t=8,b=20),showlegend=FALSE) |>
-      config(displayModeBar = FALSE)
-  })
-  
   # ── Tabela despesas ───────────────────────────────────────────
   output$t_despesas <- renderDT({
     des <- despesas_fil()
@@ -1727,12 +1687,6 @@ server <- function(input, output, session) {
             div(class="ad","\u25b2 últimos 12 meses"))
     )
   })
-  # g_acum stub — referência removida do layout mas mantida para evitar erros
-  output$g_acum <- renderPlotly({ plotly_empty() |> config(displayModeBar=FALSE) })
-  
-  # OP-12: g_diarias stub — ANÁLISE TEMPORAL removida do layout
-  output$g_diarias <- renderPlotly({ plotly_empty() |> config(displayModeBar=FALSE) })
-  
   # ═══════════════════════════════════════════════════════════
   # OUTPUT: Evolução 12 Meses — PUB-9: resultado em barras, receita em linha
   # ═══════════════════════════════════════════════════════════
@@ -1902,7 +1856,7 @@ server <- function(input, output, session) {
     req(input$mes_cart)
     flat <- build_carteira_flat(rv$app_data)
     df <- flat|>dplyr::filter(competencia==input$mes_cart)|>
-      dplyr::arrange(dplyr::desc(receita_bruta))|>dplyr::slice(1:10)
+      dplyr::arrange(dplyr::desc(receita_bruta))|>dplyr::distinct(imovel,.keep_all=TRUE)|>dplyr::slice(1:10)
     if(nrow(df)==0) return(p(class="sem-dados","Sem dados."))
     mx <- max(df$receita_bruta,1); cls <- c("b1","b2","b3","b4","b5")
     items <- lapply(seq_len(nrow(df)),function(i){
@@ -1919,7 +1873,7 @@ server <- function(input, output, session) {
     req(input$mes_cart)
     flat <- build_carteira_flat(rv$app_data)
     df <- flat|>dplyr::filter(competencia==input$mes_cart,diaria_media>0)|>
-      dplyr::arrange(dplyr::desc(diaria_media))|>dplyr::slice(1:10)
+      dplyr::arrange(dplyr::desc(diaria_media))|>dplyr::distinct(imovel,.keep_all=TRUE)|>dplyr::slice(1:10)
     if(nrow(df)==0) return(p(class="sem-dados","Sem dados."))
     mx <- max(df$diaria_media,1); cls <- c("b1","b2","b3","b4","b5")
     items <- lapply(seq_len(nrow(df)),function(i){
@@ -2008,9 +1962,6 @@ server <- function(input, output, session) {
               rownames=FALSE,class="compact stripe hover")
   },server=FALSE)
   
-  # ═══════════════════════════════════════════════════════════
-  # ABA 3 — INSIGHTS & PROPOSTA DE VALOR
-  # ═══════════════════════════════════════════════════════════
   # ═══════════════════════════════════════════════════════════
   # ABA INSIGHTS — Motor analítico multiperíodo
   # Análise: tendência linear, clustering k-means, score de
@@ -2455,16 +2406,17 @@ server <- function(input, output, session) {
       ))
     }
     
-    # 3. Imóveis em queda de tendência consistente
+    # 3. Imóveis em queda de tendência consistente (deduplicado por imóvel+proprietário)
     queda_trend <- h |>
       dplyr::filter(trend_rec < -0.15, n_meses >= 3) |>
       dplyr::arrange(trend_rec) |>
+      dplyr::distinct(imovel, proprietario, .keep_all = TRUE) |>
       dplyr::slice_head(n = 3)
     for (i in seq_len(nrow(queda_trend))) {
       r <- queda_trend[i,]
       alertas <- c(alertas, list(
         .ins_alerta("atencao",
-                    paste0(r$imovel, " — Tendência de queda consistente nos últimos ", r$n_meses, " meses"),
+                    paste0(r$imovel, " (", r$proprietario, ") — Queda consistente nos últimos ", r$n_meses, " meses"),
                     paste0("Receita média: ", brl(r$rec_media), ". ",
                            "Recomendado: revisão de contrato, verificação de avaliações e ajuste de estratégia de canais."))
       ))
@@ -2487,19 +2439,21 @@ server <- function(input, output, session) {
       ))
     }
     
-    # 5. Top performers consolidados
+    # 5. Top performers consolidados (1 por imóvel único para evitar duplicatas)
     tops <- h |>
       dplyr::filter(cluster_nome == "Alta Performance") |>
       dplyr::arrange(dplyr::desc(rec_total)) |>
+      dplyr::distinct(imovel, .keep_all = TRUE) |>
       dplyr::slice_head(n = 2)
     for (i in seq_len(nrow(tops))) {
       r <- tops[i,]
       alertas <- c(alertas, list(
         .ins_alerta("positivo",
                     paste0(r$imovel, " — Melhor performance acumulada da carteira"),
-                    paste0("Receita acumulada: ", brl(r$rec_total), " em ", r$n_meses, " meses. ",
+                    paste0("Proprietário: ", r$proprietario, ". ",
+                           "Receita acumulada: ", brl(r$rec_total), " em ", r$n_meses, " meses. ",
                            "Ocupação média: ", round(r$ocp_media,1), "%. ",
-                           "Imóvel referência para benchmark com novos proprietários."))
+                           "Referência para benchmark com novos proprietários."))
       ))
     }
     
@@ -2533,7 +2487,7 @@ server <- function(input, output, session) {
   # ── Ranking de saúde ─────────────────────────────────────
   output$ins_ranking <- renderUI({
     a <- ins_analise(); req(a)
-    h <- a$hist_im |> dplyr::arrange(dplyr::desc(score))
+    h <- a$hist_im |> dplyr::arrange(dplyr::desc(score)) |> dplyr::distinct(imovel, .keep_all = TRUE)
     n <- min(20, nrow(h))
     if (n == 0) return(p(class="sem-dados","Sem dados suficientes para ranking."))
     
@@ -2589,7 +2543,9 @@ server <- function(input, output, session) {
   })
   
   output$benchmark_imovel <- renderUI({
-    req(input$bench_imovel, nzchar(input$bench_imovel))
+    if (is.null(input$bench_imovel) || !nzchar(input$bench_imovel))
+      return(div(style="padding:24px;text-align:center;color:#9aa5b4;font-size:13px;",
+                 "Selecione um imóvel no campo acima para ver o benchmark individual."))
     flat <- build_carteira_flat(rv$app_data); if (nrow(flat) == 0) return(NULL)
     im_df <- flat |> dplyr::filter(imovel == input$bench_imovel) |> dplyr::arrange(mes)
     med_df <- flat |> dplyr::group_by(mes, mes_label) |>
@@ -2614,7 +2570,7 @@ server <- function(input, output, session) {
   })
   
   output$sec_benchmark_graficos <- renderUI({
-    req(input$bench_imovel, nzchar(input$bench_imovel))
+    if (is.null(input$bench_imovel) || !nzchar(input$bench_imovel)) return(NULL)
     div(class="cgrid",
         div(class="card",
             div(class="card-hdr", div(class="card-ttl","Receita — Imóvel vs. Média"),
@@ -2633,6 +2589,7 @@ server <- function(input, output, session) {
     med_df <- flat|>dplyr::group_by(mes,mes_label)|>
       dplyr::summarise(rec_med=mean(receita_bruta,na.rm=TRUE),.groups="drop")|>dplyr::arrange(mes)
     validate(need(nrow(im_df)>0,"Sem dados para este imóvel."))
+    ordem_r <- unique(c(med_df$mes_label, im_df$mes_label))
     plot_ly()|>
       add_lines(data=med_df,x=~mes_label,y=~rec_med,
                 line=list(color="#d1d9e0",width=2,dash="dash"),name="Média Carteira",
@@ -2641,7 +2598,8 @@ server <- function(input, output, session) {
                 line=list(color="#1a6ef7",width=2.5),marker=list(color="#1a6ef7",size=7),
                 name=input$bench_imovel,hovertemplate="%{x}<br>R$ %{y:,.0f}<extra></extra>")|>
       layout(paper_bgcolor="transparent",plot_bgcolor="transparent",
-             xaxis=list(showgrid=FALSE,zeroline=FALSE,tickfont=list(size=10),title=""),
+             xaxis=list(showgrid=FALSE,zeroline=FALSE,tickfont=list(size=10),title="",
+                        categoryorder="array",categoryarray=ordem_r),
              yaxis=list(showgrid=TRUE,gridcolor="#f3f6f9",zeroline=FALSE,tickprefix="R$ ",tickfont=list(size=10),title=""),
              margin=list(l=55,r=12,t=8,b=30),
              legend=list(x=0,y=1.15,orientation="h",font=list(size=10)))|>config(displayModeBar=FALSE)
@@ -2654,6 +2612,7 @@ server <- function(input, output, session) {
     med_df <- flat|>dplyr::group_by(mes,mes_label)|>
       dplyr::summarise(ocp_med=mean(ocupacao,na.rm=TRUE),.groups="drop")|>dplyr::arrange(mes)
     validate(need(nrow(im_df)>0,"Sem dados."))
+    ordem_o <- unique(c(med_df$mes_label, im_df$mes_label))
     plot_ly()|>
       add_lines(data=med_df,x=~mes_label,y=~ocp_med,
                 line=list(color="#d1d9e0",width=2,dash="dash"),name="Média Carteira",
@@ -2662,7 +2621,8 @@ server <- function(input, output, session) {
                 line=list(color="#00b388",width=2.5),marker=list(color="#00b388",size=7),
                 name=input$bench_imovel,hovertemplate="%{x}<br>%{y:.1f}%<extra></extra>")|>
       layout(paper_bgcolor="transparent",plot_bgcolor="transparent",
-             xaxis=list(showgrid=FALSE,zeroline=FALSE,tickfont=list(size=10),title=""),
+             xaxis=list(showgrid=FALSE,zeroline=FALSE,tickfont=list(size=10),title="",
+                        categoryorder="array",categoryarray=ordem_o),
              yaxis=list(showgrid=TRUE,gridcolor="#f3f6f9",zeroline=FALSE,ticksuffix="%",tickfont=list(size=10),title=""),
              margin=list(l=45,r=12,t=8,b=30),
              legend=list(x=0,y=1.15,orientation="h",font=list(size=10)))|>config(displayModeBar=FALSE)
@@ -2814,10 +2774,18 @@ server <- function(input, output, session) {
   # A busca é feita inteiramente via JS — sem re-render do Shiny.
   output$ger_cards <- renderUI({
     df <- ger_dados(); req(df, nrow(df) > 0)
-    # Snapshot do estado de edições para evitar re-render desnecessário
+    # isolate() garante que ger_cards só re-renderiza quando ger_dados() invalida (troca de mês).
+    # Status dos pills atualiza via mensagem JS gerPillUpdate — sem re-render de 289 cards.
+    isolate({
     edits_snap <- rv$ger_edits
     pub_snap   <- rv$ger_pub
-    
+    app_snap   <- rv$app_data
+
+    # Helpers que lêem do snapshot, não do reativo — sem dependência reativa residual
+    snap_get    <- function(key, field, default) { e <- edits_snap[[key]]; if (!is.null(e) && !is.null(e[[field]])) e[[field]] else default }
+    snap_is_pub <- function(key) isTRUE(!is.null(pub_snap[[key]]))
+    snap_status <- function(key) { if (snap_is_pub(key)) "pub" else if (!is.null(edits_snap[[key]]) && length(edits_snap[[key]]) > 0) "rev" else "pen" }
+
     fmt_diff <- function(orig, edit) {
       d <- round(edit - orig, 2)
       if (abs(d) < 0.01) return(div(class="ger-field-diff neu", "—"))
@@ -2831,36 +2799,56 @@ server <- function(input, output, session) {
       apto <- row$imovel
       prop <- row$proprietario %||% ""
       key  <- .ger_key(mes, apto)
-      st   <- .ger_status(key)
-      pub  <- .ger_is_pub(key)
-      
-      taxa_ed     <- .ger_get(key, "taxa_adm",     row$taxa_adm)
+      st   <- snap_status(key)
+      pub  <- snap_is_pub(key)
+
+      taxa_ed     <- snap_get(key, "taxa_adm",     row$taxa_adm)
       taxa_pct_ed <- {
-        pct_salvo <- .ger_get(key, "taxa_adm_pct", NULL)
+        pct_salvo <- snap_get(key, "taxa_adm_pct", NULL)
         if (!is.null(pct_salvo) && !is.na(pct_salvo)) as.numeric(pct_salvo)
         else if (row$receita_bruta > 0) round(taxa_ed / row$receita_bruta * 100, 2)
         else 0
       }
-      man_ed  <- .ger_get(key, "manutencao",     row$manutencao_total)
-      rep_ed  <- .ger_get(key, "reposicao",      row$reposicao_total)
-      des_ed  <- .ger_get(key, "despesas",       row$despesas_total)
-      nota_ed <- .ger_get(key, "nota",           "")
-      # Receita ajustada: NULL = usa original
-      rec_aj  <- .ger_get(key, "receita_ajuste", NULL)
+      man_ed  <- snap_get(key, "manutencao",     row$manutencao_total)
+      rep_ed  <- snap_get(key, "reposicao",      row$reposicao_total)
+      des_ed  <- snap_get(key, "despesas",       row$despesas_total)
+      nota_ed <- snap_get(key, "nota",           "")
+      rec_aj  <- snap_get(key, "receita_ajuste", NULL)
       rec_ed  <- if (!is.null(rec_aj) && !is.na(rec_aj)) as.numeric(rec_aj)
       else as.numeric(row$receita_bruta)
       res_ed  <- rec_ed - taxa_ed - (man_ed + rep_ed + des_ed)
-      
+
       ks       <- gsub("[^a-zA-Z0-9]","_",key)
       body_id  <- paste0("gbody_", ks)
       pill_lbl <- switch(st, pub="Publicado", rev="Em Revisão", "Pendente")
       pill_cls <- switch(st, pub="pill-pub",  rev="pill-rev",   "pill-pen")
       card_cls <- paste("ger-apto-card", st)
-      # data-search para filtro JS
       search_str <- tolower(paste(apto, prop))
-      
+
+      # Descrições individuais de custo (pedido Adriane)
+      d_prop <- app_snap[[row$cpf_cnpj %||% ""]]
+      .desc_rows <- function(tbl, col_desc, col_val) {
+        if (is.null(tbl) || !is.data.frame(tbl) || nrow(tbl) == 0) return(NULL)
+        tbl_f <- tryCatch(dplyr::filter(tbl,
+          (if ("imovel_nome" %in% names(tbl)) imovel_nome == apto else TRUE),
+          substr(as.character(if ("competencia" %in% names(tbl)) competencia else data), 1, 7) == mes
+        ), error = function(e) data.frame())
+        if (nrow(tbl_f) == 0) return(NULL)
+        lapply(seq_len(nrow(tbl_f)), function(j) {
+          desc <- if (col_desc %in% names(tbl_f)) as.character(tbl_f[[col_desc]][j]) else "—"
+          val  <- if (col_val  %in% names(tbl_f)) suppressWarnings(as.numeric(tbl_f[[col_val]][j])) else NA_real_
+          div(style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;color:#374151;border-bottom:1px solid #f5f7fa;",
+              span(desc), span(style="font-weight:600;white-space:nowrap;padding-left:8px;", if (!is.na(val)) brl(val) else "—"))
+        })
+      }
+      man_rows <- .desc_rows(d_prop$manutencao, "descricao", "valor")
+      rep_rows <- .desc_rows(d_prop$reposicao,  "item",      "valor")
+      des_rows <- .desc_rows(d_prop$despesas,   "descricao", "valor")
+      has_desc <- !is.null(man_rows) || !is.null(rep_rows) || !is.null(des_rows)
+
       div(class = card_cls,
           `data-search` = search_str,
+          `data-key` = key,
           
           # ── Cabeçalho ─────────────────────────────────
           tags$div(
@@ -2963,10 +2951,27 @@ server <- function(input, output, session) {
                       tags$textarea(id=paste0("ger_nota_",ks), class="ger-nota",
                                     placeholder="Observação interna (não visível ao proprietário)", nota_ed)
                   ),
-                  
+
+                  # Detalhamento dos custos (manutenção, reposição, despesas fixas)
+                  if (has_desc) div(class="ger-section",
+                      div(class="ger-sec-title", "Detalhamento dos Custos"),
+                      if (!is.null(man_rows)) tagList(
+                        div(style="font-size:10px;font-weight:700;color:#d97706;margin:6px 0 3px;letter-spacing:.5px;", "MANUTENÇÃO"),
+                        tagList(!!!man_rows)
+                      ),
+                      if (!is.null(rep_rows)) tagList(
+                        div(style="font-size:10px;font-weight:700;color:#1a6ef7;margin:6px 0 3px;letter-spacing:.5px;", "REPOSIÇÃO"),
+                        tagList(!!!rep_rows)
+                      ),
+                      if (!is.null(des_rows)) tagList(
+                        div(style="font-size:10px;font-weight:700;color:#6b7280;margin:6px 0 3px;letter-spacing:.5px;", "DESPESAS FIXAS"),
+                        tagList(!!!des_rows)
+                      )
+                  ),
+
                   # Confirmação de publicação
                   if (pub) div(class="ger-pub-confirm",
-                               paste0("Publicado em ", rv$ger_pub[[key]], " — dados disponíveis para o proprietário.")),
+                               paste0("Publicado em ", pub_snap[[key]], " — dados disponíveis para o proprietário.")),
                   
                   # Botões
                   div(class="ger-actions",
@@ -3015,7 +3020,7 @@ server <- function(input, output, session) {
         document.addEventListener('input', function(e) {
           var el = e.target;
           if (!el || !el.id) return;
-          var match = el.id.match(/^ger_(rec|taxa|man|rep|des|taxa_pct)_(.+)$/);
+          var match = el.id.match(/^ger_(rec|taxa_pct|taxa|man|rep|des)_(.+)$/);
           if (!match) return;
           var field = match[1];
           var ks    = match[2];
@@ -3070,9 +3075,30 @@ server <- function(input, output, session) {
             Shiny.setInputValue(e.target.id, e.target.value, {priority:'event'});
           }
         });
+        // GER-2: Atualiza pill e classe do card via mensagem Shiny — sem re-render de 289 cards
+        Shiny.addCustomMessageHandler('gerPillUpdate', function(d) {
+          var card = document.querySelector('.ger-apto-card[data-key=\"' + d.key + '\"]');
+          if (!card) return;
+          card.className = 'ger-apto-card ' + d.status;
+          var pill = card.querySelector('.ger-status-pill');
+          if (pill) { pill.className = 'ger-status-pill ' + d.pill_cls; pill.innerText = d.pill_lbl; }
+          var conf = card.querySelector('.ger-pub-confirm');
+          if (d.ts) {
+            if (!conf) {
+              conf = document.createElement('div');
+              conf.className = 'ger-pub-confirm';
+              var actions = card.querySelector('.ger-actions');
+              if (actions) actions.parentNode.insertBefore(conf, actions);
+            }
+            conf.innerText = 'Publicado em ' + d.ts + ' — dados disponíveis para o proprietário.';
+          } else if (d.status === 'pen' && conf) {
+            conf.remove();
+          }
+        });
       ")),
       !!!cards
     )
+    }) # close isolate()
   })
   
   
@@ -3121,13 +3147,14 @@ server <- function(input, output, session) {
         .ger_save_sqlite(mes, apto, df$cpf_cnpj[i], edits, publicado = FALSE)
         showNotification(paste0("Rascunho salvo — ", apto),
                          type = "message", duration = 3)
+        session$sendCustomMessage("gerPillUpdate",
+          list(key = key, status = "rev", pill_cls = "pill-rev", pill_lbl = "Em Revisão", ts = NULL))
       }, ignoreInit = TRUE, ignoreNULL = TRUE)
-      
+
       # Restaurar originais
       observeEvent(input[[id_rst]], {
         rv$ger_edits[[key]] <- NULL
         rv$ger_pub[[key]]   <- NULL
-        # Remove do SQLite
         tryCatch(ger_delete_ajuste(mes, apto), error = function(e) NULL)
         pct_orig <- if (df$receita_bruta[i] > 0)
           round(df$taxa_adm[i] / df$receita_bruta[i] * 100, 2) else 0
@@ -3139,6 +3166,8 @@ server <- function(input, output, session) {
         updateNumericInput(session, id_des,  value = round(df$despesas_total[i], 2))
         showNotification(paste0("Restaurado — ", apto),
                          type = "warning", duration = 3)
+        session$sendCustomMessage("gerPillUpdate",
+          list(key = key, status = "pen", pill_cls = "pill-pen", pill_lbl = "Pendente", ts = NULL))
       }, ignoreInit = TRUE, ignoreNULL = TRUE)
       
       # Publicar
@@ -3168,10 +3197,10 @@ server <- function(input, output, session) {
         rv$ger_edits[[key]] <- edits
         ts <- format(Sys.time(), "%d/%m/%Y %H:%M")
         rv$ger_pub[[key]]   <- ts
-        
-        # Write-back para Google Sheets (aba ger_ajustes no DB_MASTER)
+        session$sendCustomMessage("gerPillUpdate",
+          list(key = key, status = "pub", pill_cls = "pill-pub", pill_lbl = "Publicado", ts = ts))
+
         cpf <- df$cpf_cnpj[i]
-        # Grava no SQLite como publicado (publicado = TRUE)
         .ger_save_sqlite(mes, apto, cpf, edits, publicado = TRUE)
         
         # Propaga os valores revisados para rv$app_data do proprietário
