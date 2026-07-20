@@ -6,7 +6,7 @@
 # - Navegação por Proprietário + Imóvel
 # - Visão consolidada da carteira
 # - Insights e proposta de valor
-# ============================================================
+# =============================================================
 
 # Pacotes carregados via Dockerfile — sem install.packages em produção
 suppressPackageStartupMessages({
