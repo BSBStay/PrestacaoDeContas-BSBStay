@@ -2841,8 +2841,25 @@ server <- function(input, output, session) {
               span(desc), span(style="font-weight:600;white-space:nowrap;padding-left:8px;", if (!is.na(val)) brl(val) else "—"))
         })
       }
-      man_rows <- .desc_rows(d_prop$manutencao, "descricao", "valor")
-      rep_rows <- .desc_rows(d_prop$reposicao,  "item",      "valor")
+      man_rows <- .desc_rows(d_prop$manutencao, "produto_servico",      "valor_total")
+      # Reposição: monta descrição com quantidade (ex: "2× Item")
+      rep_rows <- {
+        tbl <- d_prop$reposicao
+        if (is.null(tbl) || !is.data.frame(tbl) || nrow(tbl) == 0) NULL else {
+          tbl_f <- tryCatch(dplyr::filter(tbl,
+            (if ("imovel_nome" %in% names(tbl)) imovel_nome == apto else TRUE),
+            substr(as.character(if ("competencia" %in% names(tbl)) competencia else data), 1, 7) == mes
+          ), error = function(e) data.frame())
+          if (nrow(tbl_f) == 0) NULL else lapply(seq_len(nrow(tbl_f)), function(j) {
+            item <- if ("item_limpo" %in% names(tbl_f)) as.character(tbl_f$item_limpo[j]) else "—"
+            qty  <- if ("quantidade" %in% names(tbl_f)) suppressWarnings(as.numeric(tbl_f$quantidade[j])) else NA_real_
+            val  <- if ("valor_unitario_ou_total" %in% names(tbl_f)) suppressWarnings(as.numeric(tbl_f$valor_unitario_ou_total[j])) else NA_real_
+            desc <- if (!is.na(qty) && qty != 1) paste0(qty, "× ", item) else item
+            div(style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;color:#374151;border-bottom:1px solid #f5f7fa;",
+                span(desc), span(style="font-weight:600;white-space:nowrap;padding-left:8px;", if (!is.na(val)) brl(val) else "—"))
+          })
+        }
+      }
       des_rows <- .desc_rows(d_prop$despesas,   "descricao", "valor")
       has_desc <- !is.null(man_rows) || !is.null(rep_rows) || !is.null(des_rows)
 
