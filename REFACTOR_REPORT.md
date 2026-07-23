@@ -247,6 +247,83 @@ Strings UTF-8 eram lidas como Latin-1 e armazenadas assim ("Ã£" em vez de "ã"
 
 ---
 
+## Rodada multi-dono + otimizações (23/07/2026)
+
+Decisões de negócio validadas com a gestão:
+- **(A) Modelo espelho**: cada co-proprietário vê o apartamento INTEIRO —
+  receita, custos e resultado idênticos entre os donos, em todos os meses.
+- **(B) Consolidado admin**: apto multi-dono conta UMA vez nos totais da
+  carteira; nas visões por proprietário, todos os donos aparecem individualmente.
+
+Aptos afetados (2 donos cada): Apt 606 E - SQS 205, Athos 810, Lets 27,
+Lets 31, Lets 33, Nobile 701.
+
+### M1 — ETL: custos espelhados no agregado (`bsbstay_v5_3_gs.js`)
+`rebuildAggPrestacaoContas` espelhava apenas as RESERVAS para co-donos
+(via `siblingsByPid`); manutenção, reposição, despesas e devolução somavam
+só no property_id onde o fato foi gravado → o segundo dono via receita
+cheia com custos zerados (resultado inflado).
+
+**Fix:** helper `mirrorCost_` — deduplica cada fato pela chave SEM o sufixo
+`|property_id` (linhas replicadas na ingestão diferem só nesse sufixo) e
+soma o valor em TODOS os pids irmãos do apartamento. Aplica a man/rep/des/dev,
+robusto aos dois formatos de FACT (linha única ou replicada por dono).
+Validado por simulação em R contra a DB_MASTER de 23/07: custos idênticos
+para ambos os donos, devolução sem dobra (Lets 432/342/584,66 preservados).
+
+⚠️ Requer rodar "Recalcular agregados" no Google Sheets para surtir efeito.
+
+### M2 — App: fatos visíveis para todos os donos (`R/gdrive_public.R`)
+`pid_map` mapeava property_id → 1 cpf. Fatos gravados sob o pid de um dono
+ficavam invisíveis para o outro (sem reservas, calendário e detalhamentos).
+
+**Fix:** `pid_map` agora é expandido — join property_id → nome do imóvel →
+TODOS os donos (1 linha por par). Helper `.dedupe_multi` remove réplicas
+pós-expansão pela chave-base (mesmo critério do ETL), aplicado em
+calendário, reservas, manutenção, reposição e despesas.
+
+### M3 — Consolidado sem dupla contagem (`app_master.R`)
+Com receita espelhada, os totais da carteira somavam os 6 aptos 2×
+(~R$ 57k duplicados em jun/2026).
+
+**Fix:** dois reactives com cache substituem as ~15 chamadas diretas de
+`build_carteira_flat()`:
+- `carteira_flat()` — completo, para visões POR PROPRIETÁRIO
+  (ranking de proprietários, ocupação por proprietário, tabela da carteira);
+- `carteira_flat_uni()` — `distinct(competencia, imovel)`, para CONSOLIDADOS
+  (header, KPIs, evolução, histograma, scatter, rankings de imóveis,
+  Insights/clustering, benchmark).
+
+Isso também entrega a otimização de cache: o rbind roda 1× por mudança de
+dados, não 1× por render de cada output.
+
+### M4 — Gerencial: 1 card por apto + publicação para todos os donos (`app_master.R`)
+Cards são chaveados por (mes|apto); com 2 donos, o mesmo apto gerava 2 cards
+com IDs de input DUPLICADOS no DOM (HTML inválido — Shiny vincula só o 1º).
+E o write-back de publicação aplicava os valores apenas ao cpf do card.
+
+**Fix:** `ger_dados` usa `carteira_flat_uni()` (1 card por apto físico) e o
+novo helper `.ger_apply_edits(mes, apto, edits)` propaga a publicação para
+TODOS os cpfs que possuem o imóvel — alinhado ao reload via SQLite, cujo
+join de ajustes já era por (mes, apto) sem filtro de cpf.
+
+### M5 — Dropdown de proprietários em ordem alfabética (`app_master.R`)
+Pedido da Adriane. `prop_nomes` ordenado pelo nome exibido; o dropdown de
+imóveis do benchmark também ganhou `sort(unique(...))` (aptos multi-dono
+apareciam 2× na lista).
+
+### M6 — Código morto removido (9 funções)
+| Arquivo | Funções |
+|---|---|
+| `app_public.R` | `fmt_currency`, `safe_num`, `safe_date_month` |
+| `app_master.R` | `insight_card` |
+| `R/gdrive_public.R` | `diagnostico_drive`, `carregar_xlsx_local` |
+| `bsbstay_v5_3_gs.js` | `headerIndex_`, `col_`, `fixEncoding_` (substituídas por `headerIndexCI_`, `colCI_`, `fixMojibake_`) |
+
+Verificação: `parse()` OK nos 5 arquivos R; zero referências residuais.
+
+---
+
 ## Recomendações futuras (fora do escopo desta rodada)
 
 ### Alta prioridade

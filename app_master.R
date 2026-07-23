@@ -85,22 +85,6 @@ frow <- function(lbl, val, neg = FALSE) {
       span(class = "fl", lbl),
       span(class = if (neg) "fv r" else "fv", val))
 }
-insight_card <- function(ico, titulo, corpo, cor = "blue") {
-  bg_clr <- list(
-    blue   = c("#eff6ff", "#1d4ed8"),
-    green  = c("#f0fdf4", "#15803d"),
-    orange = c("#fff7ed", "#c2410c"),
-    purple = c("#faf5ff", "#6d28d9"),
-    red    = c("#fff1f0", "#b91c1c")
-  )[[cor]] %||% c("#eff6ff", "#1d4ed8")
-  div(class = "insight-card",
-      style = paste0("background:", bg_clr[1], ";border-left:4px solid ", bg_clr[2], ";"),
-      div(class = "insight-icon", ico),
-      div(class = "insight-body",
-          div(class = "insight-title", style = paste0("color:", bg_clr[2]), titulo),
-          div(class = "insight-text", corpo)))
-}
-
 # APP_DATA_GLOBAL populado pelo run.R. Sem download bloqueante aqui.
 
 # Extrai dados flat de todos os proprietários (para aba Carteira)
@@ -494,6 +478,26 @@ server <- function(input, output, session) {
   
   observeEvent(input$btn_aba,    { rv$aba    <- input$btn_aba    }, ignoreInit = TRUE)
   observeEvent(input$btn_aba_op, { rv$op_aba <- input$btn_aba_op }, ignoreInit = TRUE)
+
+  # ── Flat da carteira com cache reativo ─────────────────────
+  # build_carteira_flat() era chamada em ~15 outputs, refazendo o rbind
+  # completo a cada render. Os dois reactives abaixo calculam uma vez por
+  # mudança de rv$app_data e servem todos os consumidores.
+  #
+  # carteira_flat():     TODAS as linhas — 1 por (proprietário, imóvel, mês).
+  #                      Usar em visões POR PROPRIETÁRIO (cada dono aparece
+  #                      com seus valores; modelo espelho p/ multi-dono).
+  # carteira_flat_uni(): 1 linha por (imóvel, mês) — aptos com 2+ donos
+  #                      contam UMA vez. Usar em totais/médias CONSOLIDADOS
+  #                      da carteira (receita espelhada não pode somar 2×).
+  carteira_flat <- reactive({
+    build_carteira_flat(rv$app_data)
+  })
+  carteira_flat_uni <- reactive({
+    f <- carteira_flat()
+    if (nrow(f) == 0) return(f)
+    dplyr::distinct(f, competencia, imovel, .keep_all = TRUE)
+  })
   
   # Polling: sincroniza rv$app_data com APP_DATA_GLOBAL
   # Detecta mudanças via ts_refresh (gravado pelo auto_refresh_ em run.R),
@@ -516,8 +520,9 @@ server <- function(input, output, session) {
   output$hdr_stats <- renderUI({
     d <- rv$app_data; if (length(d) == 0) return(NULL)
     n_prop <- length(d)
-    n_imov <- sum(sapply(d, function(x) length(x$imoveis_ids)))
-    flat   <- build_carteira_flat(d)
+    flat   <- carteira_flat_uni()   # consolidado: apto multi-dono conta 1×
+    n_imov <- if (nrow(flat) > 0) length(unique(flat$imovel))
+    else sum(sapply(d, function(x) length(x$imoveis_ids)))
     rec    <- if (nrow(flat) > 0) sum(flat$receita_bruta, na.rm = TRUE) else 0
     div(class = "hdr-stats",
         div(class = "hdr-stat", div(class = "hdr-stat-val", n_prop),
@@ -580,7 +585,10 @@ server <- function(input, output, session) {
     d <- rv$app_data; if (length(d) == 0) return(NULL)
     props      <- names(d)
     prop_nomes <- setNames(props, sapply(props, function(cpf) d[[cpf]]$proprietario %||% cpf))
-    flat       <- build_carteira_flat(d)
+    # Ordem alfabética pelo NOME exibido (pedido Adriane, jul/2026)
+    prop_nomes <- prop_nomes[order(names(prop_nomes))]
+    props      <- unname(prop_nomes)
+    flat       <- carteira_flat_uni()
     meses_cart <- if (nrow(flat) > 0) sort(unique(flat$competencia), decreasing = TRUE) else character(0)
     meses_cart_lbl <- setNames(meses_cart, {
       dt <- suppressWarnings(as.Date(paste0(meses_cart, "-01")))
@@ -1801,10 +1809,15 @@ server <- function(input, output, session) {
   
   output$kpis_carteira <- renderUI({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    # Consolidado: usa a versão deduplicada (apto multi-dono conta 1×)
+    flat <- carteira_flat_uni()
     if(nrow(flat)==0) return(p(class="sem-dados","Sem dados."))
     mes <- dplyr::filter(flat,competencia==input$mes_cart)
     if(nrow(mes)==0) return(p(class="sem-dados","Sem dados para o mês selecionado."))
+    # Nº de proprietários vem do flat completo (todos os donos contam)
+    n_props <- carteira_flat() |>
+      dplyr::filter(competencia==input$mes_cart) |>
+      dplyr::pull(proprietario) |> unique() |> length()
     div(class="kgrid",
         kcard("Receita Total",   s_brl_compact(sum(mes$receita_bruta,na.rm=TRUE)),
               paste(length(unique(mes$imovel)),"imóveis ativos")),
@@ -1812,13 +1825,14 @@ server <- function(input, output, session) {
               "após deduções",vg=TRUE),
         kcard("Ocupação Média",  s_pct(mean(mes$ocupacao,na.rm=TRUE)),  "carteira inteira"),
         kcard("Diária Média",    s_brl(mean(mes$diaria_media,na.rm=TRUE)), "carteira inteira"),
-        kcard("Proprietários",   as.character(length(unique(mes$proprietario))),
+        kcard("Proprietários",   as.character(n_props),
               paste(length(unique(mes$imovel)),"imóveis ativos")))
   })
   
   output$ranking_proprietarios <- renderUI({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    # Por proprietário: flat completo — cada dono aparece com seus valores
+    flat <- carteira_flat()
     df <- flat|>dplyr::filter(competencia==input$mes_cart)|>
       dplyr::group_by(proprietario)|>
       dplyr::summarise(receita=sum(receita_bruta,na.rm=TRUE),n_im=dplyr::first(n_imoveis),.groups="drop")|>
@@ -1837,7 +1851,7 @@ server <- function(input, output, session) {
   
   output$g_ocupacao_prop <- renderPlotly({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    flat <- carteira_flat()
     df <- flat|>dplyr::filter(competencia==input$mes_cart)|>
       dplyr::group_by(proprietario)|>dplyr::summarise(ocp=mean(ocupacao,na.rm=TRUE),.groups="drop")|>
       dplyr::arrange(ocp)|>dplyr::mutate(lbl=substr(proprietario,1,22))
@@ -1854,9 +1868,9 @@ server <- function(input, output, session) {
   
   output$ranking_imoveis_receita <- renderUI({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    flat <- carteira_flat_uni()   # já deduplicado por imóvel
     df <- flat|>dplyr::filter(competencia==input$mes_cart)|>
-      dplyr::arrange(dplyr::desc(receita_bruta))|>dplyr::distinct(imovel,.keep_all=TRUE)|>dplyr::slice(1:10)
+      dplyr::arrange(dplyr::desc(receita_bruta))|>dplyr::slice(1:10)
     if(nrow(df)==0) return(p(class="sem-dados","Sem dados."))
     mx <- max(df$receita_bruta,1); cls <- c("b1","b2","b3","b4","b5")
     items <- lapply(seq_len(nrow(df)),function(i){
@@ -1871,9 +1885,9 @@ server <- function(input, output, session) {
   
   output$ranking_imoveis_diaria <- renderUI({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    flat <- carteira_flat_uni()   # já deduplicado por imóvel
     df <- flat|>dplyr::filter(competencia==input$mes_cart,diaria_media>0)|>
-      dplyr::arrange(dplyr::desc(diaria_media))|>dplyr::distinct(imovel,.keep_all=TRUE)|>dplyr::slice(1:10)
+      dplyr::arrange(dplyr::desc(diaria_media))|>dplyr::slice(1:10)
     if(nrow(df)==0) return(p(class="sem-dados","Sem dados."))
     mx <- max(df$diaria_media,1); cls <- c("b1","b2","b3","b4","b5")
     items <- lapply(seq_len(nrow(df)),function(i){
@@ -1887,7 +1901,7 @@ server <- function(input, output, session) {
   })
   
   output$g_evolucao_carteira <- renderPlotly({
-    flat <- build_carteira_flat(rv$app_data)
+    flat <- carteira_flat_uni()   # consolidado sem dupla contagem
     if(nrow(flat)==0) validate(need(FALSE,"Sem dados."))
     df <- flat|>dplyr::group_by(mes,mes_label)|>
       dplyr::summarise(receita=sum(receita_bruta,na.rm=TRUE),resultado=sum(resultado_liq,na.rm=TRUE),.groups="drop")|>
@@ -1913,7 +1927,7 @@ server <- function(input, output, session) {
   
   output$g_dist_ocupacao <- renderPlotly({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    flat <- carteira_flat_uni()   # 1 barra por imóvel físico
     df <- dplyr::filter(flat,competencia==input$mes_cart)
     validate(need(nrow(df)>0,"Sem dados."))
     plot_ly(df,x=~ocupacao,type="histogram",nbinsx=15,
@@ -1927,7 +1941,7 @@ server <- function(input, output, session) {
   
   output$g_scatter_rec_res <- renderPlotly({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    flat <- carteira_flat_uni()   # 1 ponto por imóvel físico
     df <- dplyr::filter(flat,competencia==input$mes_cart)
     validate(need(nrow(df)>0,"Sem dados."))
     plot_ly(df,x=~receita_bruta,y=~resultado_liq,type="scatter",mode="markers",
@@ -1943,7 +1957,8 @@ server <- function(input, output, session) {
   
   output$t_carteira <- renderDT({
     req(input$mes_cart)
-    flat <- build_carteira_flat(rv$app_data)
+    # Tabela por proprietário×imóvel: flat completo — ambos os donos aparecem
+    flat <- carteira_flat()
     df <- flat|>dplyr::filter(competencia==input$mes_cart)|>
       dplyr::arrange(proprietario,imovel)|>
       dplyr::transmute(
@@ -2012,7 +2027,9 @@ server <- function(input, output, session) {
   
   # ── Reactive: análise multiperíodo ─────────────────────────
   ins_analise <- reactive({
-    flat <- build_carteira_flat(rv$app_data)
+    # Consolidado deduplicado: KPIs, clustering e rankings contam cada
+    # imóvel físico uma única vez (multi-dono espelhado não duplica)
+    flat <- carteira_flat_uni()
     if (is.null(flat) || nrow(flat) == 0) return(NULL)
     
     flat <- flat |>
@@ -2176,9 +2193,11 @@ server <- function(input, output, session) {
               span(class = "badge badge-blue", "Evolução histórica")),
           selectInput("bench_imovel", NULL,
                       choices  = c("Selecione..." = "",
-                                   setNames(
-                                     unlist(lapply(rv$app_data, function(d) d$imoveis_ids)),
-                                     unlist(lapply(rv$app_data, function(d) d$imoveis_ids)))),
+                                   {
+                                     # unique: apto multi-dono aparece 1× no dropdown
+                                     ids <- sort(unique(unlist(lapply(rv$app_data, function(d) d$imoveis_ids))))
+                                     setNames(ids, ids)
+                                   }),
                       width = "280px"),
           shinycssloaders::withSpinner(uiOutput("benchmark_imovel"), type = 4, color = "#1a6ef7")),
       shinycssloaders::withSpinner(uiOutput("sec_benchmark_graficos"), type = 4, color = "#7c3aed")
@@ -2546,7 +2565,7 @@ server <- function(input, output, session) {
     if (is.null(input$bench_imovel) || !nzchar(input$bench_imovel))
       return(div(style="padding:24px;text-align:center;color:#9aa5b4;font-size:13px;",
                  "Selecione um imóvel no campo acima para ver o benchmark individual."))
-    flat <- build_carteira_flat(rv$app_data); if (nrow(flat) == 0) return(NULL)
+    flat <- carteira_flat_uni(); if (nrow(flat) == 0) return(NULL)
     im_df <- flat |> dplyr::filter(imovel == input$bench_imovel) |> dplyr::arrange(mes)
     med_df <- flat |> dplyr::group_by(mes, mes_label) |>
       dplyr::summarise(ocp_med = mean(ocupacao, na.rm=TRUE),
@@ -2584,7 +2603,7 @@ server <- function(input, output, session) {
   
   output$g_bench_receita <- renderPlotly({
     req(input$bench_imovel, nzchar(input$bench_imovel))
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) validate(need(FALSE,""))
+    flat <- carteira_flat_uni(); if(nrow(flat)==0) validate(need(FALSE,""))
     im_df  <- flat|>dplyr::filter(imovel==input$bench_imovel)|>dplyr::arrange(mes)
     med_df <- flat|>dplyr::group_by(mes,mes_label)|>
       dplyr::summarise(rec_med=mean(receita_bruta,na.rm=TRUE),.groups="drop")|>dplyr::arrange(mes)
@@ -2607,7 +2626,7 @@ server <- function(input, output, session) {
   
   output$g_bench_ocupacao <- renderPlotly({
     req(input$bench_imovel, nzchar(input$bench_imovel))
-    flat <- build_carteira_flat(rv$app_data); if(nrow(flat)==0) validate(need(FALSE,""))
+    flat <- carteira_flat_uni(); if(nrow(flat)==0) validate(need(FALSE,""))
     im_df  <- flat|>dplyr::filter(imovel==input$bench_imovel)|>dplyr::arrange(mes)
     med_df <- flat|>dplyr::group_by(mes,mes_label)|>
       dplyr::summarise(ocp_med=mean(ocupacao,na.rm=TRUE),.groups="drop")|>dplyr::arrange(mes)
@@ -2636,6 +2655,31 @@ server <- function(input, output, session) {
   
   # ── Helpers ────────────────────────────────────────────────
   .ger_key    <- function(mes, apto) paste0(as.character(mes), "|", apto)
+
+  # Propaga valores publicados para TODOS os proprietários do imóvel.
+  # Modelo espelho (multi-dono): a publicação de um card vale para os 2+
+  # donos do apartamento — mesmo comportamento do reload via SQLite, cujo
+  # join de ajustes é por (mes, apto) sem filtro de cpf.
+  .ger_apply_edits <- function(mes, apto, edits) {
+    for (cpf in names(rv$app_data)) {
+      recs <- rv$app_data[[cpf]]$receitas
+      if (is.null(recs)) next
+      idx_r <- which(recs$competencia == mes & recs$imovel == apto)
+      if (length(idx_r) == 0) next
+      if (!is.null(edits$receita_ajuste) && !is.na(edits$receita_ajuste))
+        rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] <- edits$receita_ajuste
+      rv$app_data[[cpf]]$receitas$taxa_adm[idx_r]         <- edits$taxa_adm
+      rv$app_data[[cpf]]$receitas$manutencao_total[idx_r] <- edits$manutencao
+      rv$app_data[[cpf]]$receitas$reposicao_total[idx_r]  <- edits$reposicao
+      rv$app_data[[cpf]]$receitas$despesas_total[idx_r]   <- edits$despesas
+      rv$app_data[[cpf]]$receitas$outros_custos[idx_r]    <-
+        edits$manutencao + edits$reposicao + edits$despesas
+      rv$app_data[[cpf]]$receitas$resultado_liq[idx_r]    <-
+        rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
+        edits$taxa_adm -
+        (edits$manutencao + edits$reposicao + edits$despesas)
+    }
+  }
   .ger_get    <- function(key, field, default) { e <- rv$ger_edits[[key]]; if (!is.null(e) && !is.null(e[[field]])) e[[field]] else default }
   .ger_is_pub <- function(key) isTRUE(!is.null(rv$ger_pub[[key]]))
   .ger_status <- function(key) { if (.ger_is_pub(key)) "pub" else if (!is.null(rv$ger_edits[[key]]) && length(rv$ger_edits[[key]]) > 0) "rev" else "pen" }
@@ -2703,7 +2747,10 @@ server <- function(input, output, session) {
     req(rv$aba == "gerencial")
     d <- rv$app_data; if (length(d) == 0) return(NULL)
     mes_sel <- input$ger_mes; req(!is.null(mes_sel), nzchar(mes_sel))
-    flat <- build_carteira_flat(d); if (nrow(flat) == 0) return(NULL)
+    # 1 card por imóvel físico: a chave do card é (mes|apto); com 2 donos o
+    # flat completo geraria 2 cards com os MESMOS IDs de input (HTML inválido,
+    # Shiny só vincula o primeiro). A publicação propaga a todos os donos.
+    flat <- carteira_flat_uni(); if (nrow(flat) == 0) return(NULL)
     mes_chr <- substr(as.character(mes_sel), 1, 7)
     flat |>
       dplyr::filter(substr(as.character(competencia), 1, 7) == mes_chr) |>
@@ -2723,7 +2770,7 @@ server <- function(input, output, session) {
   output$body_gerencial <- renderUI({
     d <- rv$app_data
     if (length(d) == 0) return(div(class="empty-state", h3("Carregando..."), p("Aguarde a sincronização.")))
-    flat <- build_carteira_flat(d)
+    flat <- carteira_flat_uni()
     if (nrow(flat) == 0) return(div(class="empty-state", h3("Sem dados.")))
     meses_disp <- sort(unique(substr(as.character(flat$competencia), 1, 7)), decreasing = TRUE)
     meses_lbl  <- setNames(meses_disp, {
@@ -3219,29 +3266,10 @@ server <- function(input, output, session) {
 
         cpf <- df$cpf_cnpj[i]
         .ger_save_sqlite(mes, apto, cpf, edits, publicado = TRUE)
-        
-        # Propaga os valores revisados para rv$app_data do proprietário
-        cpf <- df$cpf_cnpj[i]
-        if (!is.null(rv$app_data[[cpf]]$receitas)) {
-          idx_r <- which(rv$app_data[[cpf]]$receitas$competencia == mes &
-                           rv$app_data[[cpf]]$receitas$imovel == apto)
-          if (length(idx_r) > 0) {
-            # Receita: aplica ajuste se foi modificada
-            if (!is.null(edits$receita_ajuste) && !is.na(edits$receita_ajuste))
-              rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] <- edits$receita_ajuste
-            rv$app_data[[cpf]]$receitas$taxa_adm[idx_r]         <- edits$taxa_adm
-            rv$app_data[[cpf]]$receitas$manutencao_total[idx_r] <- edits$manutencao
-            rv$app_data[[cpf]]$receitas$reposicao_total[idx_r]  <- edits$reposicao
-            rv$app_data[[cpf]]$receitas$despesas_total[idx_r]   <- edits$despesas
-            rv$app_data[[cpf]]$receitas$outros_custos[idx_r] <-
-              edits$manutencao + edits$reposicao + edits$despesas
-            rv$app_data[[cpf]]$receitas$resultado_liq[idx_r] <-
-              rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
-              edits$taxa_adm -
-              (edits$manutencao + edits$reposicao + edits$despesas)
-          }
-        }
-        
+
+        # Propaga os valores revisados para TODOS os donos do imóvel
+        .ger_apply_edits(mes, apto, edits)
+
         showNotification(
           paste0("Publicado — ", apto, " (", df$proprietario[i], ")"),
           type = "message", duration = 5
@@ -3264,25 +3292,8 @@ server <- function(input, output, session) {
         if (!is.null(edits)) {
           cpf <- df$cpf_cnpj[i]
           .ger_save_sqlite(as.character(df$competencia[i]), df$imovel[i], cpf, edits, publicado = TRUE)
-          cpf <- df$cpf_cnpj[i]
-          mes <- as.character(df$competencia[i])
-          apto <- df$imovel[i]
-          if (!is.null(rv$app_data[[cpf]]$receitas)) {
-            idx_r <- which(rv$app_data[[cpf]]$receitas$competencia == mes &
-                             rv$app_data[[cpf]]$receitas$imovel == apto)
-            if (length(idx_r) > 0) {
-              rv$app_data[[cpf]]$receitas$taxa_adm[idx_r]         <- edits$taxa_adm
-              rv$app_data[[cpf]]$receitas$manutencao_total[idx_r] <- edits$manutencao
-              rv$app_data[[cpf]]$receitas$reposicao_total[idx_r]  <- edits$reposicao
-              rv$app_data[[cpf]]$receitas$despesas_total[idx_r]   <- edits$despesas
-              rv$app_data[[cpf]]$receitas$outros_custos[idx_r]    <-
-                edits$manutencao + edits$reposicao + edits$despesas
-              rv$app_data[[cpf]]$receitas$resultado_liq[idx_r]    <-
-                rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
-                edits$taxa_adm -
-                (edits$manutencao + edits$reposicao + edits$despesas)
-            }
-          }
+          # Propaga para TODOS os donos do imóvel (modelo espelho)
+          .ger_apply_edits(as.character(df$competencia[i]), df$imovel[i], edits)
         }
         n_pub <- n_pub + 1
       }

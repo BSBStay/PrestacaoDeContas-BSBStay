@@ -26,16 +26,6 @@ TOKEN_TODOS <- "__todos__"
 
 # fmt_mes_pt, MESES_PT_FULL/ABBR definidos em R/gdrive_public.R
 
-fmt_currency <- function(x) {
-  v <- suppressWarnings(as.numeric(x))
-  if (length(v) == 0) return("R$ —")
-  ifelse(
-    is.na(v),
-    "R$ —",
-    paste0("R$ ", formatC(v, format = "f", digits = 2, big.mark = ".", decimal.mark = ","))
-  )
-}
-
 # brl vetorizada — segura dentro de dplyr::transmute
 brl <- function(x) {
   sapply(x, function(v) {
@@ -45,17 +35,6 @@ brl <- function(x) {
   }, USE.NAMES = FALSE)
 }
 
-
-safe_num <- function(x, default = 0) {
-  y <- suppressWarnings(as.numeric(x))
-  y[is.na(y)] <- default
-  y
-}
-
-safe_date_month <- function(x) {
-  if (inherits(x, "Date")) return(as.Date(format(x, "%Y-%m-01")))
-  suppressWarnings(as.Date(paste0(substr(as.character(x), 1, 7), "-01")))
-}
 
 kcard <- function(lbl, val, delta = "", dn = FALSE, vg = FALSE, icon = "", extra_class = "") {
   div(

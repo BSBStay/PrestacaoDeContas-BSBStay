@@ -629,17 +629,42 @@ montar_objeto_app_sqlite <- function(con) {
     data.frame()
   })
   
-  # ── Mapa property_id → cpf_cnpj ──────────────────────────────
+  # ── Mapa property_id → dono(s) do imóvel ─────────────────────
+  # MULTI-DONO (modelo espelho, validado com a gestão em jul/2026): cada
+  # co-proprietário vê o apartamento INTEIRO. Fatos gravados sob o
+  # property_id de apenas um dono são expandidos para TODOS os donos do
+  # mesmo imóvel — o join abaixo produz 1 linha por (property_id, dono).
   pid_map <- if (nrow(portfolio) > 0) {
-    portfolio |>
-      dplyr::select(property_id, cpf_cnpj, imovel_nome = nome) |>
+    pid_nome <- portfolio |>
+      dplyr::select(property_id, imovel_nome = nome) |>
       dplyr::distinct(property_id, .keep_all = TRUE)
+    owners_imovel <- portfolio |>
+      dplyr::select(imovel_nome = nome, cpf_cnpj) |>
+      dplyr::distinct()
+    pid_nome |> dplyr::left_join(owners_imovel, by = "imovel_nome")
   } else {
     data.frame(
       property_id = character(),
       cpf_cnpj = character(),
       imovel_nome = character()
     )
+  }
+
+  # Dedupe pós-expansão: FACTs novas já chegam replicadas por co-dono
+  # (1 linha por property_id, chave terminando em "|<property_id>").
+  # Após o join acima, essas réplicas gerariam o mesmo item 2× para o
+  # mesmo dono. Remove pela chave-base (sem o sufixo do pid): itens
+  # iguais para o mesmo cpf_cnpj contam uma única vez.
+  .dedupe_multi <- function(df, key_col) {
+    if (nrow(df) == 0 || !key_col %in% names(df) ||
+        !all(c("cpf_cnpj", "property_id") %in% names(df))) return(df)
+    k   <- as.character(df[[key_col]])
+    suf <- paste0("|", as.character(df$property_id))
+    rep_pid <- !is.na(k) & endsWith(k, suf)
+    df$.base_key <- ifelse(rep_pid, substr(k, 1L, nchar(k) - nchar(suf)), k)
+    df |>
+      dplyr::distinct(cpf_cnpj, .base_key, .keep_all = TRUE) |>
+      dplyr::select(-".base_key")
   }
   
   # ── 3. Calendario ─────────────────────────────────────────────
@@ -654,8 +679,9 @@ montar_objeto_app_sqlite <- function(con) {
           valor    = dplyr::coalesce(as.numeric(diaria_liquida), 0)
         ) |>
         dplyr::filter(!is.na(checkin), !is.na(checkout), checkout > checkin) |>
-        dplyr::left_join(pid_map, by = "property_id")
-      
+        dplyr::left_join(pid_map, by = "property_id") |>
+        .dedupe_multi("reserva_key")
+
       if (nrow(res_clean) == 0) return(data.frame())
 
       # Vetorizado: expande todas as reservas de uma vez sem lapply row-by-row
@@ -716,7 +742,8 @@ montar_objeto_app_sqlite <- function(con) {
         ) |>
         dplyr::filter(!is.na(checkin), !is.na(checkout), checkout > checkin) |>
         dplyr::left_join(pid_map, by = "property_id") |>
-        dplyr::filter(!is.na(cpf_cnpj))
+        dplyr::filter(!is.na(cpf_cnpj)) |>
+        .dedupe_multi("reserva_key")
     } else {
       data.frame()
     }
@@ -737,7 +764,8 @@ montar_objeto_app_sqlite <- function(con) {
           produto_servico = if ("produto_servico" %in% names(manutencao)) as.character(produto_servico) else NA_character_
         ) |>
         dplyr::left_join(pid_map, by = "property_id") |>
-        dplyr::filter(!is.na(cpf_cnpj))
+        dplyr::filter(!is.na(cpf_cnpj)) |>
+        .dedupe_multi("manut_key")
     } else {
       data.frame()
     }
@@ -757,7 +785,8 @@ montar_objeto_app_sqlite <- function(con) {
           competencia             = as.character(competencia)
         ) |>
         dplyr::left_join(pid_map, by = "property_id") |>
-        dplyr::filter(!is.na(cpf_cnpj))
+        dplyr::filter(!is.na(cpf_cnpj)) |>
+        .dedupe_multi("rep_key")
     } else {
       data.frame()
     }
@@ -776,8 +805,9 @@ montar_objeto_app_sqlite <- function(con) {
           competencia = as.character(competencia)
         ) |>
         dplyr::left_join(pid_map, by = "property_id") |>
-        dplyr::filter(!is.na(cpf_cnpj))
-      
+        dplyr::filter(!is.na(cpf_cnpj)) |>
+        .dedupe_multi("desp_key")
+
       if (!"categoria" %in% names(df)) {
         if ("tipo" %in% names(df)) {
           df <- dplyr::rename(df, categoria = tipo)
@@ -935,64 +965,6 @@ status_cache <- function() {
   )
 }
 
-# ── Diagnóstico ────────────────────────────────────────────────
-diagnostico_drive <- function(file_id = DRIVE_FILE_ID) {
-  cat("\n=============================================\n")
-  cat("  BSBStay - Diagnostico v3.1\n")
-  cat("=============================================\n\n")
-  
-  cat("1. Rede... ")
-  ok_net <- tryCatch({
-    tmp <- tempfile()
-    on.exit(unlink(tmp), add = TRUE)
-    
-    old_to <- getOption("timeout")
-    options(timeout = 10)
-    on.exit(options(timeout = old_to), add = TRUE)
-    
-    utils::download.file("https://www.google.com", tmp, quiet = TRUE, method = "libcurl") == 0
-  }, error = function(e) FALSE)
-  cat(if (ok_net) "OK\n" else "SEM REDE\n")
-  
-  fid <- trimws(file_id %||% "")
-  cat(sprintf(
-    "2. DRIVE_FILE_ID... %s\n",
-    if (nzchar(fid)) paste("OK:", fid) else "NAO CONFIGURADO"
-  ))
-  
-  st <- tryCatch(status_cache(), error = function(e) NULL)
-  
-  sqlite_msg <- if (!is.null(st) && length(st$tabelas) > 0) {
-    sprintf("%d tabelas, sync: %s", length(st$tabelas), st$last_sync %||% "nunca")
-  } else {
-    "Vazio"
-  }
-  
-  cat(sprintf("3. SQLite... %s\n", sqlite_msg))
-  invisible(NULL)
-}
-
-# ── Fallback manual ────────────────────────────────────────────
-carregar_xlsx_local <- function(path_xlsx) {
-  if (!file.exists(path_xlsx)) stop("Arquivo nao encontrado: ", path_xlsx)
-  
-  dir.create(dirname(CACHE_XLSX), recursive = TRUE, showWarnings = FALSE)
-  file.copy(path_xlsx, CACHE_XLSX, overwrite = TRUE)
-  
-  con <- sqlite_connect()
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  
-  db <- ler_e_processar_db_master(CACHE_XLSX)
-  
-  for (nm in names(db)) {
-    if (is.data.frame(db[[nm]])) {
-      sqlite_write_table(db[[nm]], nm, con)
-    }
-  }
-  
-  sqlite_set_meta(CACHE_META_KEY, format(Sys.time()), con)
-  montar_objeto_app_sqlite(con)
-}
 # ══════════════════════════════════════════════════════════════
 # AUTH — Gerenciamento de senhas dos proprietários
 # Armazenadas no SQLite local com hash SHA-256 (digest)

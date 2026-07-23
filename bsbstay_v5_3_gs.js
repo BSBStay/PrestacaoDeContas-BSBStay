@@ -925,21 +925,10 @@ function normalizeOrigem_(o) {
   return "Outros";
 }
 
-function headerIndex_(row) {
-  const idx={};
-  row.forEach((h,i) => idx[String(h).trim()]=i);
-  return idx;
-}
-
 function headerIndexLoose_(row) {
   const idx={};
   row.forEach((h,i) => { const k=normalize_(h); if(k) idx[k]=i; });
   return idx;
-}
-
-function col_(idxL, ...keys) {
-  for (const k of keys) { const kk=normalize_(k); if(idxL[kk]!==undefined) return idxL[kk]; }
-  return undefined;
 }
 
 function extractEmpUnidade_(apto) {
@@ -986,13 +975,6 @@ function normalizeTipoDespesa_(t) {
   if (s.includes("inter")||s.includes("tv")) return "Internet/TV";
   if (s.includes("gas")) return "Gás";
   return "Outros";
-}
-
-function fixEncoding_(s) {
-  return String(s||"")
-    .replace(/â€"/g,"-").replace(/â€"/g,"-")
-    .replace(/â€™/g,"'").replace(/â€œ/g,'"').replace(/â€/g,'"')
-    .replace(/Ã£/g,"ã").replace(/Ã©/g,"é").replace(/Ã§/g,"ç");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1973,33 +1955,47 @@ function rebuildAggPrestacaoContas(competencia) {
       a.receita_liquida += receita;
     }
   }
-  for (const r of factMan.rows) {
-    const c = parseCompetencia_(r[factMan.idx["competencia"]]);
-    const p = String(r[factMan.idx["property_id"]]||"").trim();
-    if (!c||!p) continue;
-    getA_(c,p).manutencao_total += Number(r[factMan.idx["valor_total"]]||0);
-  }
-  for (const r of factRep.rows) {
-    const c = parseCompetencia_(r[factRep.idx["competencia"]]);
-    const p = String(r[factRep.idx["property_id"]]||"").trim();
-    if (!c||!p) continue;
-    const a = getA_(c,p);
+  // ── MULTI-DONO: custos espelhados para todos os co-proprietários ──────────
+  // Modelo de negócio (validado c/ Adriane em jul/2026): cada dono vê o
+  // apartamento INTEIRO — receita, custos e resultado idênticos entre donos.
+  //
+  // As FACTs de custo podem existir em dois formatos:
+  //   a) 1 linha por apartamento (ingestões antigas / alias com pid único)
+  //   b) 1 linha por property_id (ingestões novas com resolveAll_)
+  // Para agregar 1× por item e espelhar a todos os donos independentemente do
+  // formato, deduplicamos pela chave SEM o sufixo |property_id (linhas
+  // replicadas por co-propriedade diferem apenas nesse sufixo) e somamos o
+  // valor em TODOS os pids irmãos do apartamento.
+  const baseKey_ = (rawKey, pid) => {
+    const s = String(rawKey||"");
+    return s.endsWith(`|${pid}`) ? s.slice(0, -(pid.length+1)) : s;
+  };
+  const mirrorCost_ = (rows, idx, keyCol, seen, apply) => {
+    for (const r of rows) {
+      const c = parseCompetencia_(r[idx["competencia"]]);
+      const p = String(r[idx["property_id"]]||"").trim();
+      if (!c||!p) continue;
+      const bk = `${c}|${baseKey_(r[idx[keyCol]], p)}`;
+      if (seen.has(bk)) continue;
+      seen.add(bk);
+      for (const pid of (siblingsByPid.get(p) || [p])) apply(getA_(c, pid), r);
+    }
+  };
+
+  mirrorCost_(factMan.rows, factMan.idx, "manut_key", new Set(), (a, r) => {
+    a.manutencao_total += Number(r[factMan.idx["valor_total"]]||0);
+  });
+  mirrorCost_(factRep.rows, factRep.idx, "rep_key", new Set(), (a, r) => {
     a.reposicao_total += Number(r[factRep.idx["valor_unitario_ou_total"]]||0);
     a.itens_reposicao++;
     a.qtd_itens += Number(r[factRep.idx["quantidade"]]||0);
-  }
-  for (const r of factDes.rows) {
-    const c = parseCompetencia_(r[factDes.idx["competencia"]]);
-    const p = String(r[factDes.idx["property_id"]]||"").trim();
-    if (!c||!p) continue;
-    getA_(c,p).despesas_total += Number(r[factDes.idx["valor"]]||0);
-  }
-  for (const r of factDev.rows) {
-    const c = parseCompetencia_(r[factDev.idx["competencia"]]);
-    const p = String(r[factDev.idx["property_id"]]||"").trim();
-    if (!c||!p) continue;
-    getA_(c,p).devolucao_limpeza += Number(r[factDev.idx["valor_devolvido"]]||0);
-  }
+  });
+  mirrorCost_(factDes.rows, factDes.idx, "desp_key", new Set(), (a, r) => {
+    a.despesas_total += Number(r[factDes.idx["valor"]]||0);
+  });
+  mirrorCost_(factDev.rows, factDev.idx, "dev_key", new Set(), (a, r) => {
+    a.devolucao_limpeza += Number(r[factDev.idx["valor_devolvido"]]||0);
+  });
 
   const out  = [];
   const IM0  = { nome:"", empreendimento:"", unidade:"", ownerId:"", comissaoPct:DEFAULT_COMISSAO_PCT };
