@@ -395,6 +395,24 @@ divergem entre os apps (helpers locais de UI legítimos).
 - `brl` canônica validada (valor, NA, vetor misto, vazio)
 - Zero referências residuais a símbolos removidos
 
+### Hotfix pós-deploy: card "Acumulado dos Últimos 12 Meses"
+
+A remoção do attach de lubridate quebrou `mes_max %m-% months(11)` no
+`output$acumulado` dos DOIS apps (a varredura original buscou `%m+%` e
+`month(`, mas não `%m-%`/`months(`). O card exibia "An error has occurred"
+em produção.
+
+**Fix:** substituído por base R — `seq(mes_max, by = "-11 months",
+length.out = 2)[2]`. Como `mes` é sempre dia 1º do mês, o resultado é
+idêntico ao do lubridate (validado para 4 datas de teste, incluindo
+viradas de ano).
+
+**Validação reforçada:** varredura automatizada via `getParseData()` de
+TODAS as chamadas de função dos 3 apps contra os exports dos pacotes
+efetivamente anexados — nenhum outro símbolo órfão (todos os demais
+candidatos eram falsos positivos: `tags$*` ou chamadas `::`-prefixadas,
+confirmado por grep).
+
 ---
 
 ## Recomendações futuras (fora do escopo desta rodada)

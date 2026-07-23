@@ -1675,7 +1675,9 @@ server <- function(input, output, session) {
     df_base <- rec_fil()
     if (nrow(df_base) == 0) return(p(class="sem-dados","Sem dados."))
     mes_max <- max(df_base$mes, na.rm=TRUE)
-    mes_ini <- mes_max %m-% months(11)
+    # Base R: mes é sempre dia 1º ("YYYY-MM-01"), então seq() por meses é
+    # exato — sem depender de lubridate (%m-% quebrou após remover o attach)
+    mes_ini <- seq(mes_max, by = "-11 months", length.out = 2)[2]
     df_12   <- df_base |> dplyr::filter(mes >= mes_ini)
     acum    <- df_12 |> dplyr::summarise(
       rec = sum(receita_bruta, na.rm=TRUE),
