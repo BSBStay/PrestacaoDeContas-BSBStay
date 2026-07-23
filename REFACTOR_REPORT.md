@@ -1,4 +1,4 @@
-# REFACTOR_REPORT.md — BSBStay Dashboard
+# REFACTOR_REPORT.md — BSBStay Dashboard #
 **Data:** 2026-07-20  
 **Escopo:** Limpeza de código, otimização de performance e hardening de segurança
 
@@ -324,34 +324,86 @@ Verificação: `parse()` OK nos 5 arquivos R; zero referências residuais.
 
 ---
 
+## Rodada de hardening e limpeza final (23/07/2026 — tarde)
+
+### 🔴 Regressão de segurança corrigida: fallback de senha admin
+
+**`app.R:47`** — `ADMIN_PASS` estava novamente com o fallback hardcoded
+`"bsbstay123"`. A correção original (default vazio) foi perdida em algum
+momento entre commits, tornando morta a checagem `if (!nzchar(ADMIN_PASS))`
+da linha seguinte. **Restaurado o default vazio** — sem a env var
+`BSBSTAY_ADMIN_PASS`, o login admin fica desativado.
+
+### Segurança implementada (itens da auditoria anterior)
+
+**S1 — Hash de senhas iterado com salt aleatório (`R/gdrive_public.R`)**
+Formato novo `pbkdf2v2$<iter>$<salt>$<hash>`: salt aleatório por usuário
+(inviabiliza rainbow tables) + SHA-256 iterado 10.000× (~157 ms por hash,
+encarecendo força bruta offline na mesma proporção). Migração transparente:
+`auth_check_senha` reconhece o hash legado (SHA-256 único com salt=CPF),
+valida e regrava em v2 no primeiro login bem-sucedido. Testado de ponta a
+ponta em SQLite temporário: cadastro novo, senha errada, login legado,
+migração e re-login pós-migração.
+
+**S2 — Timeout de sessão por inatividade (`app.R`)**
+Heartbeat JS (click/keydown/mousemove/touch/scroll) + observer que chama
+`session$close()` após N minutos sem interação — apenas em sessões
+autenticadas. Configurável via `BSBSTAY_IDLE_TIMEOUT_MIN` (default 30;
+0 desativa).
+
+**S3 — auth_registry com recarga sob demanda (`app.R`)**
+O registro de proprietários era carregado uma única vez no startup — novos
+proprietários no Drive não conseguiam logar sem reiniciar o container.
+Agora `auth_registry_find()` usa cache em memória e, em caso de documento
+não encontrado, recarrega do SQLite UMA vez antes de negar. Custo extra só
+em lookups que falhariam (protegidos pelo rate limiting existente).
+
+**S4 — XSS em nome de proprietário (`app.R`)**
+`tela_alterar_senha` interpolava `nome_prop` (origem: planilha do Drive)
+dentro de `HTML(paste0(...))` sem escape — vetor de stored XSS via célula
+da planilha. Agora `htmltools::htmlEscape(nome_prop)`. As demais
+interpolações usam funções `div()/p()` que já escapam automaticamente.
+
+Verificados sem achados: SQL 100% parametrizado (`params = list(...)` em
+todas as queries), sem `eval/parse` de entrada externa, sem paths de
+usuário em `file.path` (path traversal), erros sanitizados
+(`shiny.sanitize.errors = TRUE` mantido).
+
+### DRY — helpers consolidados
+
+`%||%` estava definido **5×** (app.R, app_public.R **2×** no mesmo arquivo,
+app_master.R, gdrive_public.R) com implementação idêntica; `brl` estava 2×
+com implementações diferentes (sapply vs. vetorizada) e mesmo resultado.
+Mantida uma única definição de cada em `R/gdrive_public.R` (sourceado por
+todos os apps antes do uso) — a `brl` canônica é a vetorizada (mais rápida).
+`kcard`/`frow`/`kcard_sm` NÃO foram unificados: assinaturas e estilos
+divergem entre os apps (helpers locais de UI legítimos).
+
+### Código morto e imports
+
+- `TOKEN_TODOS` (app_public.R) — constante sem nenhum uso, removida.
+- Attach de pacotes sem uso direto removidos:
+  - `app_master.R`: tidyr, lubridate (::), readxl, janitor, stringr, DBI, RSQLite
+  - `app_public.R`: lubridate (::), htmltools (HTML/tags vêm do shiny)
+  Os pacotes continuam instalados e acessíveis via `::` onde usados.
+
+### Validação desta rodada
+
+- `parse()` OK nos 5 arquivos R
+- Teste unitário do fluxo auth completo (formato v2, determinismo, salts
+  únicos, migração legada, senha errada) — 12/12 verificações TRUE
+- `brl` canônica validada (valor, NA, vetor misto, vazio)
+- Zero referências residuais a símbolos removidos
+
+---
+
 ## Recomendações futuras (fora do escopo desta rodada)
 
-### Alta prioridade
-
-1. **Migrar para bcrypt** (`R/gdrive_public.R` — `auth_hash`)  
-   SHA-256 com CPF como salt é computacionalmente barato — ataques de força bruta offline são viáveis se o SQLite vazar. Substituir por `bcrypt::hashpw()` / `bcrypt::checkpw()` do pacote `bcrypt`. O campo `senha_hash` no SQLite precisaria ser migrado (novo hash gerado no próximo login).
-
-2. **Timeout de sessão por inatividade** (`app.R`)  
-   Não há logout automático. Implementar via heartbeat JavaScript + observer R que chama `session$close()` após N minutos sem interação.
-
-3. **auth_registry com refresh periódico** (`app.R:50-76`)  
-   Carregado uma única vez no startup; novos proprietários adicionados ao xlsx não conseguem logar sem reiniciar o container. Solução: expor função de reload acionável pelo admin ou adicionar invalidação periódica.
-
-### Média prioridade
-
-4. **Extrair helpers compartilhados para `R/utils.R`**  
-   `%||%`, `brl`, `frow`, `kcard`, `kcard_sm` estão triplicados entre `gdrive_public.R`, `app_public.R` e `app_master.R`. Um arquivo `R/utils.R` sourceado por `gdrive_public.R` eliminaria as duplicatas.
-
-5. **`btn_sync` assíncrono** (`app_public.R`)  
+1. **`btn_sync` assíncrono** (`app_public.R`)  
    O handler do botão "Atualizar dados" chama `carregar_dados_app()` de forma síncrona, bloqueando o processo Shiny durante o download. Refatorar com `promises` / `future` para processar em background.
 
-6. **`diagnostico_drive()` usar `cat()` seguro** (`R/gdrive_public.R`)  
-   A função usa `cat()` diretamente — em ambiente Shiny isso vai para stdout do processo, não para o usuário. Converter para retornar lista estruturada.
+2. **`DRIVE_FILE_ID` / `DRIVE_FOLDER_ID` via env vars obrigatórias** (`R/gdrive_public.R`)  
+   Os fallbacks hardcoded expõem os IDs no código-fonte (risco baixo: IDs de arquivos públicos de leitura). Considerar exigir as env vars em produção.
 
-### Baixa prioridade
-
-7. **Remover cabeçalho de versão obsoleto** (`app_public.R:1-10`)  
-   Refere-se a "v3.0" e lista funcionalidades internas — informação que pertence ao git log, não ao código.
-
-8. **`DRIVE_FILE_ID` / `DRIVE_FOLDER_ID` via env vars obrigatórias** (`R/gdrive_public.R`)  
-   Os fallbacks hardcoded expõem os IDs no código-fonte. Considerar exigir as env vars ou remover os defaults.
+3. **bcrypt/argon2 nativo**  
+   O esquema atual (SHA-256 iterado 10.000× com salt aleatório) já elimina rainbow tables e encarece força bruta ~10.000×. Uma migração futura para `bcrypt`/`argon2` (pacotes dedicados com custo de memória) seguiria o mesmo caminho de migração transparente já implementado.

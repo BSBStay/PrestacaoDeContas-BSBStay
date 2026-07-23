@@ -1,15 +1,15 @@
 # ============================================================
 # app_public.R — Extrato do Proprietário autenticado por sessão
-# ============================================================
+# =============================================================
 
 suppressPackageStartupMessages({
   library(shiny)
   library(bslib)
   library(dplyr)
-  library(lubridate)
   library(plotly)
   library(DT)
-  library(htmltools)
+  # lubridate: usado só com prefixo :: — attach desnecessário
+  # htmltools: HTML()/tags vêm do shiny — attach desnecessário
 })
 
 APP_ROOT <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork = FALSE)
@@ -18,23 +18,7 @@ if (!exists("carregar_dados_app")) {
   source(file.path(APP_ROOT, "R", "gdrive_public.R"), local = FALSE)
 }
 
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
-}
-
-TOKEN_TODOS <- "__todos__"
-
-# fmt_mes_pt, MESES_PT_FULL/ABBR definidos em R/gdrive_public.R
-
-# brl vetorizada — segura dentro de dplyr::transmute
-brl <- function(x) {
-  sapply(x, function(v) {
-    v <- suppressWarnings(as.numeric(v))
-    if (is.na(v)) return("R$ \u2014")
-    paste0("R$ ", formatC(v, format = "f", digits = 2, big.mark = ".", decimal.mark = ","))
-  }, USE.NAMES = FALSE)
-}
-
+# %||%, brl, fmt_mes_pt, MESES_PT_FULL/ABBR definidos em R/gdrive_public.R
 
 kcard <- function(lbl, val, delta = "", dn = FALSE, vg = FALSE, icon = "", extra_class = "") {
   div(
@@ -1720,7 +1704,5 @@ server <- function(input, output, session) {
 } # fim server
 
 
-
-`%||%` <- function(x, y) if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
 
 app <- shinyApp(ui, server)

@@ -5,7 +5,7 @@
 #   - correção de ambiguidade no mutate() de fact_manutencao
 #   - correção de ambiguidade no mutate() de fact_despesas
 #   - loops com chaves explícitas para evitar erro de parse
-# ============================================================
+# =============================================================
 
 # ── Ambiente / paths ──────────────────────────────────────────
 APP_ROOT <- get0(
@@ -66,8 +66,18 @@ if (is.na(MAX_CACHE_AGE_H) || MAX_CACHE_AGE_H <= 0) MAX_CACHE_AGE_H <- 2
 .ensure_pkgs(c("readxl", "DBI", "RSQLite", "dplyr", "lubridate", "tidyr", "janitor"))
 
 # ── Utilitários ───────────────────────────────────────────────
+# Compartilhados por app.R, app_public.R e app_master.R (este arquivo é
+# sourceado por todos antes de qualquer uso) — NÃO redefinir nos apps.
 `%||%` <- function(x, y) {
   if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
+}
+
+# Formata moeda BRL — vetorizada, segura dentro de dplyr::transmute/mutate
+brl <- function(x) {
+  v <- suppressWarnings(as.numeric(x))
+  ifelse(is.na(v), "R$ —",
+         paste0("R$ ", formatC(v, format = "f", digits = 2,
+                               big.mark = ".", decimal.mark = ",")))
 }
 
 parse_date_safe <- function(x) {
@@ -990,10 +1000,38 @@ auth_ensure_table <- function(con = NULL) {
   invisible(TRUE)
 }
 
-# Hash seguro da senha (SHA-256 com salt = cpf_cnpj)
-auth_hash <- function(senha, cpf_cnpj) {
+# ── Hashing de senhas ─────────────────────────────────────────
+# Formato atual (v2): "pbkdf2v2$<iterações>$<salt>$<hash>"
+#   - salt aleatório por usuário (inviabiliza rainbow tables)
+#   - SHA-256 iterado (encarece força bruta offline ~10.000×)
+# Formato legado: hash SHA-256 puro (64 hex) com salt = cpf.
+# A migração é transparente: auth_check_senha valida no formato legado
+# e regrava no v2 no primeiro login bem-sucedido.
+AUTH_HASH_ITER <- 10000L
+
+.auth_require_digest <- function() {
   if (!requireNamespace("digest", quietly = TRUE))
     stop("Pacote 'digest' necessário para hashing de senhas.")
+}
+
+.auth_salt_novo <- function() {
+  .auth_require_digest()
+  # Entropia de múltiplas fontes do processo; suficiente para unicidade do salt
+  digest::digest(paste(Sys.time(), Sys.getpid(), stats::runif(4), sep = "|"),
+                 algo = "sha256", serialize = FALSE)
+}
+
+.auth_hash_v2 <- function(senha, salt, iter = AUTH_HASH_ITER) {
+  .auth_require_digest()
+  h <- paste0(salt, "||", trimws(senha))
+  for (i in seq_len(iter)) h <- digest::digest(h, algo = "sha256", serialize = FALSE)
+  paste0("pbkdf2v2$", iter, "$", salt, "$", h)
+}
+
+# Hash legado (SHA-256 único, salt = cpf) — mantido SÓ para validar e
+# migrar senhas criadas antes do v2. Não usar em novos cadastros.
+auth_hash <- function(senha, cpf_cnpj) {
+  .auth_require_digest()
   digest::digest(paste0(trimws(cpf_cnpj), "||", trimws(senha)),
                  algo = "sha256", serialize = FALSE)
 }
@@ -1024,7 +1062,7 @@ auth_set_senha <- function(cpf_cnpj, senha, con = NULL) {
 
   auth_ensure_table(con)
   cpf_norm <- gsub("[^0-9]", "", as.character(cpf_cnpj))
-  hash     <- auth_hash(senha, cpf_norm)
+  hash     <- .auth_hash_v2(senha, .auth_salt_novo())
   agora    <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
 
   DBI::dbExecute(con,
@@ -1052,5 +1090,22 @@ auth_check_senha <- function(cpf_cnpj, senha, con = NULL) {
     error = function(e) data.frame(senha_hash = character(0))
   )
   if (nrow(res) == 0) return(FALSE)
-  identical(res$senha_hash[1], auth_hash(senha, cpf_norm))
+  stored <- res$senha_hash[1]
+
+  if (startsWith(stored, "pbkdf2v2$")) {
+    # Formato v2: recomputa com o salt e iterações armazenados
+    partes <- strsplit(stored, "$", fixed = TRUE)[[1]]
+    if (length(partes) != 4) return(FALSE)
+    iter <- suppressWarnings(as.integer(partes[2]))
+    if (is.na(iter) || iter < 1L) return(FALSE)
+    return(identical(stored, .auth_hash_v2(senha, partes[3], iter)))
+  }
+
+  # Formato legado (SHA-256 único): valida e migra para v2 no sucesso
+  ok_legado <- identical(stored, auth_hash(senha, cpf_norm))
+  if (ok_legado) {
+    tryCatch(auth_set_senha(cpf_norm, senha, con),
+             error = function(e) message("[Auth] AVISO migração v2: ", e$message))
+  }
+  ok_legado
 }

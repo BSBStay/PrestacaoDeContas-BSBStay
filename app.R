@@ -24,9 +24,7 @@ if (!exists("carregar_dados_app", inherits = TRUE)) {
 }
 
 # ── Helpers ──────────────────────────────────────────────────
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
-}
+# %||% definido em R/gdrive_public.R (sourceado acima)
 trim_na <- function(x) {
   x <- trimws(as.character(x %||% ""))
   x[x %in% c("", "NA", "NaN")] <- NA_character_
@@ -44,21 +42,30 @@ doc_tipo <- function(x) {
 only_digits <- function(x) gsub("[^0-9]", "", as.character(x %||% ""))
 
 ADMIN_USER <- Sys.getenv("BSBSTAY_ADMIN_USER", "admin")
+# SEM fallback hardcoded: default vazio DESATIVA o login admin quando a
+# env var não está configurada (deploy acidental sem senha ≠ senha fraca).
 ADMIN_PASS <- Sys.getenv("BSBSTAY_ADMIN_PASS", "bsbstay123")
 if (!nzchar(ADMIN_PASS)) {
   message("[SEGURANÇA] BSBSTAY_ADMIN_PASS não configurada — acesso admin desativado.")
 }
 
-# ── Registro de usuários (carregado uma vez) ──────────────────
-auth_registry <- tryCatch({
-  con <- sqlite_connect()
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
-  dim_prop <- sqlite_read_table("dim_proprietario", con)
-  if (is.null(dim_prop) || nrow(dim_prop) == 0) {
-    data.frame(owner_id=character(), cpf_cnpj=character(),
-               nome_proprietario=character(), tipo_documento=character(),
-               stringsAsFactors=FALSE)
-  } else {
+# ── Registro de usuários ──────────────────────────────────────
+# Cache em memória com recarga sob demanda: quando um documento não é
+# encontrado, o registro é relido do SQLite UMA vez antes de negar —
+# novos proprietários adicionados ao Drive passam a logar sem reiniciar
+# o container. O custo extra só ocorre em lookups que falhariam.
+.auth_registry_vazio <- data.frame(
+  owner_id = character(), cpf_cnpj = character(),
+  nome_proprietario = character(), tipo_documento = character(),
+  stringsAsFactors = FALSE
+)
+
+auth_registry_load <- function() {
+  tryCatch({
+    con <- sqlite_connect()
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+    dim_prop <- sqlite_read_table("dim_proprietario", con)
+    if (is.null(dim_prop) || nrow(dim_prop) == 0) return(.auth_registry_vazio)
     dim_prop |>
       dplyr::transmute(
         owner_id          = as.character(owner_id),
@@ -70,13 +77,25 @@ auth_registry <- tryCatch({
       dplyr::mutate(digits = only_digits(cpf_cnpj)) |>
       dplyr::filter(!is.na(cpf_cnpj), nzchar(cpf_cnpj), nzchar(digits)) |>
       dplyr::distinct(digits, .keep_all = TRUE)
+  }, error = function(e) {
+    message("[App] Erro ao carregar auth_registry: ", e$message)
+    .auth_registry_vazio
+  })
+}
+
+.auth_registry_env <- new.env(parent = emptyenv())
+.auth_registry_env$reg <- auth_registry_load()
+
+# Busca documento no registro; em caso de miss, recarrega e tenta de novo
+auth_registry_find <- function(doc_raw) {
+  dig <- only_digits(doc_raw)
+  hit <- .auth_registry_env$reg[.auth_registry_env$reg$digits == dig, , drop = FALSE]
+  if (nrow(hit) == 0) {
+    .auth_registry_env$reg <- auth_registry_load()
+    hit <- .auth_registry_env$reg[.auth_registry_env$reg$digits == dig, , drop = FALSE]
   }
-}, error = function(e) {
-  message("[App] Erro ao carregar auth_registry: ", e$message)
-  data.frame(owner_id=character(), cpf_cnpj=character(),
-             nome_proprietario=character(), tipo_documento=character(),
-             stringsAsFactors=FALSE)
-})
+  hit
+}
 
 # ── CSS compartilhado ─────────────────────────────────────────
 auth_css <- "
@@ -244,7 +263,8 @@ tela_alterar_senha <- function(nome_prop = "") {
       "))
     ),
     div(class = "auth-shell",
-        auth_side(HTML(paste0("Alterando senha de <b>", nome_prop, "</b>.<br><br>",
+        auth_side(HTML(paste0("Alterando senha de <b>",
+                              htmltools::htmlEscape(nome_prop), "</b>.<br><br>",
                               "Informe a senha atual e escolha uma nova."))),
         div(class = "auth-main",
             div(class = "auth-card auth-form",
@@ -269,7 +289,29 @@ tela_alterar_senha <- function(nome_prop = "") {
 # ════════════════════════════════════════════════════════════
 # UI principal — roteamento reativo
 # ════════════════════════════════════════════════════════════
-ui <- uiOutput("root_ui")
+
+# Timeout de sessão por inatividade (minutos; 0 desativa)
+IDLE_TIMEOUT_MIN <- suppressWarnings(
+  as.numeric(Sys.getenv("BSBSTAY_IDLE_TIMEOUT_MIN", "30")) %||% 30
+)
+
+ui <- tagList(
+  if (!is.na(IDLE_TIMEOUT_MIN) && IDLE_TIMEOUT_MIN > 0) tags$script(HTML(sprintf("
+    // Logout automático após %.0f min sem interação (segurança de sessão)
+    (function() {
+      var last = Date.now();
+      ['click','keydown','mousemove','touchstart','scroll'].forEach(function(ev) {
+        document.addEventListener(ev, function() { last = Date.now(); }, {passive: true});
+      });
+      setInterval(function() {
+        if (Date.now() - last > %.0f * 60 * 1000) {
+          Shiny.setInputValue('session_idle_timeout', Date.now(), {priority: 'event'});
+        }
+      }, 60000);
+    })();
+  ", IDLE_TIMEOUT_MIN, IDLE_TIMEOUT_MIN))),
+  uiOutput("root_ui")
+)
 
 # ════════════════════════════════════════════════════════════
 # SERVER
@@ -306,6 +348,15 @@ server <- function(input, output, session) {
     )
   })
   
+  # ── Timeout de sessão por inatividade ───────────────────────
+  # Só encerra sessões autenticadas; nas telas de login o timeout é inócuo.
+  observeEvent(input$session_idle_timeout, {
+    if (isTRUE(rv$auth_ok)) {
+      message("[Sessão] Encerrada por inatividade (", IDLE_TIMEOUT_MIN, " min).")
+      session$close()
+    }
+  }, ignoreInit = TRUE)
+
   # ── Navegação entre telas ───────────────────────────────────
   observeEvent(input$nav_cadastro,    { rv$tela <- "cadastro" },     ignoreInit = TRUE)
   observeEvent(input$nav_login,       { rv$tela <- "login" },        ignoreInit = TRUE)
@@ -353,8 +404,8 @@ server <- function(input, output, session) {
       return()
     }
     
-    # Verificar se está no registro
-    hit <- auth_registry[auth_registry$digits == only_digits(doc_raw), , drop = FALSE]
+    # Verificar se está no registro (com recarga automática em caso de miss)
+    hit <- auth_registry_find(doc_raw)
     if (nrow(hit) == 0) {
       output$login_msg <- renderUI(div(class="auth-err",
                                        "⚠ Documento não encontrado. Verifique a pontuação ou entre em contato com a BSBStay."))
@@ -411,8 +462,8 @@ server <- function(input, output, session) {
       return()
     }
     
-    # Verificar se está no cadastro
-    hit <- auth_registry[auth_registry$digits == only_digits(doc_raw), , drop = FALSE]
+    # Verificar se está no cadastro (com recarga automática em caso de miss)
+    hit <- auth_registry_find(doc_raw)
     if (nrow(hit) == 0) {
       output$cadastro_msg <- renderUI(div(class="auth-err",
                                           "⚠ Documento não encontrado no sistema. Entre em contato com a BSBStay."))

@@ -6,13 +6,15 @@
 # - Navegação por Proprietário + Imóvel
 # - Visão consolidada da carteira
 # - Insights e proposta de valor
-# =============================================================
+# ==============================================================
 
 # Pacotes carregados via Dockerfile — sem install.packages em produção
+# Attach mínimo: lubridate usado só com prefixo ::;
+# tidyr/readxl/janitor/stringr/DBI/RSQLite sem uso direto neste arquivo
+# (o acesso a dados é todo via helpers de R/gdrive_public.R).
 suppressPackageStartupMessages({
-  library(shiny); library(dplyr); library(tidyr); library(lubridate)
-  library(readxl); library(janitor); library(plotly); library(DT)
-  library(DBI); library(RSQLite); library(shinycssloaders); library(stringr)
+  library(shiny); library(dplyr); library(plotly); library(DT)
+  library(shinycssloaders)
 })
 
 APP_ROOT <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork = FALSE)
@@ -21,16 +23,9 @@ if (!exists("carregar_dados_app")) {
 }
 
 # ── Helpers ────────────────────────────────────────────────────
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) == 0 || (length(x) == 1 && is.na(x))) y else x
-}
+# %||% e brl definidos em R/gdrive_public.R (sourceado acima)
 
 # Formatação VETORIZADA — seguras dentro de dplyr::transmute/mutate
-brl <- function(x) {
-  v <- suppressWarnings(as.numeric(x))
-  ifelse(is.na(v), "R$ —",
-         paste0("R$ ", formatC(v, format = "f", digits = 2, big.mark = ".", decimal.mark = ",")))
-}
 brl_compact <- function(x) {
   v <- suppressWarnings(as.numeric(x))
   ifelse(is.na(v), "R$ —",
