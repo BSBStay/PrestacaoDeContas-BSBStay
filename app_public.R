@@ -1,6 +1,6 @@
 # ============================================================
 # app_public.R — Extrato do Proprietário autenticado por sessão
-# =============================================================
+# ==============================================================
 
 suppressPackageStartupMessages({
   library(shiny)

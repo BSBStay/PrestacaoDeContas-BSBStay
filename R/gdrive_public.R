@@ -5,7 +5,7 @@
 #   - correção de ambiguidade no mutate() de fact_manutencao
 #   - correção de ambiguidade no mutate() de fact_despesas
 #   - loops com chaves explícitas para evitar erro de parse
-# =============================================================
+# ==============================================================
 
 # ── Ambiente / paths ──────────────────────────────────────────
 APP_ROOT <- get0(
@@ -694,18 +694,39 @@ montar_objeto_app_sqlite <- function(con) {
 
       if (nrow(res_clean) == 0) return(data.frame())
 
+      # ── Recorte por competência ───────────────────────────────
+      # Reservas que cruzam a virada do mês são gravadas em DUAS
+      # competências, cada uma com sua fatia de noites (a soma dos
+      # noites_no_mes = noites_total). Expandir checkin→checkout
+      # inteiro em AMBAS duplicaria os dias compartilhados no
+      # calendário. Recortamos cada linha aos limites do mês da sua
+      # própria competência — validado contra as 13.970 reservas da
+      # base: o recorte reproduz noites_no_mes com zero divergência.
+      ini_r <- res_clean$checkin
+      fim_r <- res_clean$checkout            # exclusivo (dia do checkout não ocupa)
+      if ("competencia" %in% names(res_clean)) {
+        m_ini <- suppressWarnings(
+          as.Date(paste0(substr(as.character(res_clean$competencia), 1, 7), "-01")))
+        # +32 dias sempre cai no mês seguinte (mês mais longo = 31 dias);
+        # normalizar para o dia 1º dá o limite superior exclusivo.
+        m_fim <- as.Date(format(m_ini + 32L, "%Y-%m-01"))
+        tem_c <- !is.na(m_ini)
+        ini_r[tem_c] <- pmax(ini_r[tem_c], m_ini[tem_c])
+        fim_r[tem_c] <- pmin(fim_r[tem_c], m_fim[tem_c])
+      }
+
       # Vetorizado: expande todas as reservas de uma vez sem lapply row-by-row
-      n_nights <- as.integer(res_clean$checkout - res_clean$checkin)
-      valid    <- n_nights > 0
+      n_nights <- as.integer(fim_r - ini_r)
+      valid    <- !is.na(n_nights) & n_nights > 0
       if (!any(valid)) return(data.frame())
 
       res_v    <- res_clean[valid, ]
       n_v      <- n_nights[valid]
-      starts   <- as.integer(res_v$checkin)
+      starts   <- as.integer(ini_r[valid])
       all_int  <- unlist(Map(seq.int, starts, starts + n_v - 1L), use.names = FALSE)
       idx      <- rep(seq_len(nrow(res_v)), n_v)
 
-      data.frame(
+      cal_df <- data.frame(
         cpf_cnpj      = res_v$cpf_cnpj[idx]      %||% NA_character_,
         property_id   = res_v$property_id[idx],
         apto_original = res_v$imovel_nome[idx]    %||% NA_character_,
@@ -714,6 +735,12 @@ montar_objeto_app_sqlite <- function(con) {
         ocupado       = TRUE,
         stringsAsFactors = FALSE
       )
+
+      # Blindagem: sobreposições reais na MESMA competência (erro na
+      # planilha fonte — duplicata de lançamento ou datas cruzadas)
+      # ainda gerariam o mesmo dia 2×. O calendário nunca deve renderizar
+      # dia repetido; o conflito é reportado à gestão para correção na origem.
+      cal_df |> dplyr::distinct(cpf_cnpj, property_id, data, .keep_all = TRUE)
     } else {
       data.frame()
     }

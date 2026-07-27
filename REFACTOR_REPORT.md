@@ -415,6 +415,97 @@ confirmado por grep).
 
 ---
 
+## Correção: dias duplicados no Calendário de Ocupação (23/07/2026)
+
+### Causa raiz
+
+Reservas que **cruzam a virada do mês** são gravadas em DUAS competências —
+comportamento correto do ETL, que reparte as noites via `overlapNights_`:
+
+```
+APT 606 E SQS 205, 30/05→03/06
+  competencia 2026-05 → noites_no_mes = 2
+  competencia 2026-06 → noites_no_mes = 2
+                        soma = 4 = noites_total ✓
+```
+
+A expansão do calendário em `R/gdrive_public.R` percorria `checkin → checkout`
+de **toda** linha, ignorando a competência dela. As duas linhas expandiam o
+intervalo completo, então os dias compartilhados saíam duas vezes. Na
+renderização (`app_master.R` / `app_public.R`), o `left_join` sobre a sequência
+do mês propagava a duplicata: junho gerava 32 células em vez de 30.
+
+**Não tinha relação com multi-dono**: 558 dos 574 pares sobrepostos eram de
+apartamentos com dono único, e o `property_id` era idêntico nos dois registros.
+
+### Alcance (antes do fix)
+
+| Métrica | Valor |
+|---|---|
+| Dias-célula duplicados | 5.295 de 43.590 (12%) |
+| Apartamentos afetados | 264 de 296 |
+| Proprietários afetados | 105 |
+
+Afetava o Calendário de Ocupação e os KPIs derivados dele (diária média/maior/
+menor). Receita, taxa adm, resultado, Relatório de Reservas e Histórico não
+eram atingidos — todos filtram por competência.
+
+### C1 — Recorte por competência (`R/gdrive_public.R`)
+
+Cada linha passa a ser recortada aos limites do mês da sua própria competência
+antes da expansão. Limite superior calculado sem lubridate:
+`as.Date(format(m_ini + 32L, "%Y-%m-01"))` — somar 32 dias sempre cai no mês
+seguinte (mês mais longo = 31), e normalizar ao dia 1º dá o fim exclusivo.
+
+**Validação:** sobre as 13.970 reservas da base, o recorte reproduz
+`noites_no_mes` com **zero divergência** — prova de que o calendário passa a
+falar a mesma língua do agregado.
+
+### C2 — Blindagem contra dia repetido (`R/gdrive_public.R`)
+
+`distinct(cpf_cnpj, property_id, data)` ao fim da construção. Garante que
+sobreposições reais na mesma competência (erro de origem) nunca rendam célula
+duplicada. A chave inclui `cpf_cnpj`, então aptos multi-dono seguem com uma
+linha por dono — cada um enxerga o imóvel inteiro.
+
+**Verificado após o fix:** 0 duplicatas por (dono, imóvel, dia); máximo de 30
+células em junho; ocupação máxima 100%; os 6 aptos multi-dono continuam
+aparecendo para os 2 donos com os mesmos dias.
+
+### C3 — Detecção de sobreposição no ETL (`bsbstay_v5_3_gs.js`)
+
+O ETL não detectava duas reservas do mesmo mês ocupando o mesmo dia — por isso
+14 conflitos passaram silenciosos e inflaram `noites_no_mes` (3 imóveis com
+ocupação acima de 100%). Adicionada varredura ao fim de `ingestReservas_` que
+enfileira o caso como pendência `RESERVA_SOBREPOSTA`, com as datas das duas
+reservas e o nº de dias em conflito. `queuePend_` ganhou um parâmetro `tipo`
+opcional (default preserva o comportamento das chamadas existentes).
+
+O algoritmo usa **máximo corrente** de check-out, não comparação com o vizinho
+imediato: uma reserva longa englobando várias curtas (Saint Moritz 1612:
+11→21 vs 16→18, 19→20 e 20→22) teria 2 dos 3 conflitos perdidos pela versão
+ingênua. Portado para R e conferido contra varredura exaustiva O(n²):
+**14/14 detecções idênticas**.
+
+### C4 — Relatório para correção na fonte
+
+`data/CONFLITOS_RESERVAS.xlsx` — duas abas:
+- **Conflitos de Reserva**: as 14 ocorrências com datas, hóspedes, valores,
+  diagnóstico provável (duplicata / conflito / data trocada) e ação sugerida;
+  linhas de datas idênticas destacadas.
+- **Impacto na Ocupação**: os 3 imóveis-mês com ocupação acima de 100%.
+
+Diagnóstico dos 14: 1 duplicata pura (Fusion 1011, mesmo hóspede "Eduardo
+Monteiro" lançado 2×), 1 conflito de reservas distintas nas mesmas datas
+(Fusion 622) e 12 prováveis erros de data de check-in/check-out.
+
+⚠️ O recorte e a blindagem corrigem a exibição imediatamente. Os 14 conflitos
+precisam ser corrigidos na planilha fonte para que `noites_no_mes` e a ocupação
+do agregado também fiquem exatos — até lá, o calendário mostra os dias reais
+(cada um uma vez) e o agregado segue contando a noite em duplicidade.
+
+---
+
 ## Recomendações futuras (fora do escopo desta rodada)
 
 1. **`btn_sync` assíncrono** (`app_public.R`)  

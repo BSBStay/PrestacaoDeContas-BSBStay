@@ -1,7 +1,7 @@
 /***********************
  * BSB3 / BSBSTAY — DB_MASTER V5.1
 
- ***********************/
+ ************************/
 
 const ROOT_FOLDER_ID = "1753AZxwmyyWYS2oYQPLeMHIz5gM8bscb";
 const DEFAULT_COMISSAO_PCT = 0.20;
@@ -1146,8 +1146,8 @@ function resolve_(aliasMap, canonMap, source, aptoOriginal) {
   return { propertyId: propertyIds.length > 0 ? propertyIds[0] : "", aptoNorm };
 }
 
-function queuePend_(batch, competencia, source, aptoOriginal, aptoNorm, obs) {
-  batch.push([new Date(), competencia, source, "IMOVEL_NAO_CADASTRADO",
+function queuePend_(batch, competencia, source, aptoOriginal, aptoNorm, obs, tipo) {
+  batch.push([new Date(), competencia, source, tipo || "IMOVEL_NAO_CADASTRADO",
     aptoOriginal, aptoNorm, "", obs||""]);
 }
 
@@ -1487,6 +1487,41 @@ function ingestReservas_(competencia, sourcesFolder, dedupe, aliasMap, canonMap,
       adultos, criancas, round2_(totalPago), round2_(taxaLimpeza), round2_(comissaoCanal),
       hospede
     ]);
+  }
+
+  // ── Detecção de sobreposição de datas no MESMO apartamento ────────────────
+  // Reservas que cruzam a virada do mês são legítimas (cada competência
+  // recebe sua fatia via overlapNights_). Já duas reservas do MESMO mês
+  // ocupando o mesmo dia indicam erro na planilha fonte: lançamento
+  // duplicado ou data de check-in/check-out trocada. Sem esta checagem o
+  // problema passa silencioso e infla noites_no_mes (ocupação > 100%).
+  const porApto = new Map();
+  for (const r of out) {
+    const pid = String(r[5] || r[4] || "");
+    if (!pid) continue;
+    if (!porApto.has(pid)) porApto.set(pid, []);
+    porApto.get(pid).push({ apto: r[3], aptoNorm: r[4], ci: r[6], co: r[7] });
+  }
+  for (const [, lista] of porApto) {
+    if (lista.length < 2) continue;
+    lista.sort((a, b) => a.ci - b.ci);
+    // Máximo corrente de check-out: comparar só com o vizinho imediato
+    // perderia o caso de uma reserva longa englobando várias curtas
+    // (ex.: 11→21 vs 16→18, 19→20 e 20→22 no mesmo mês).
+    let ref = lista[0];
+    for (let i = 1; i < lista.length; i++) {
+      const cur = lista[i];
+      // Intervalos são [check-in, check-out): o dia do check-out não ocupa,
+      // então encostar (co == ci) não é conflito.
+      if (cur.ci < ref.co) {
+        const dias = Math.round((Math.min(cur.co, ref.co) - cur.ci) / 86400000);
+        queuePend_(pendBatch, competencia, "reservas", cur.apto, cur.aptoNorm,
+          `Sobreposição de ${dias} dia(s): ${fmtDate_(ref.ci)}→${fmtDate_(ref.co)} ` +
+          `e ${fmtDate_(cur.ci)}→${fmtDate_(cur.co)}. Verificar duplicata ou data trocada.`,
+          "RESERVA_SOBREPOSTA");
+      }
+      if (cur.co > ref.co) ref = cur;   // avança a referência de maior alcance
+    }
   }
 
   appendRows_(CFG.SHEETS.FACT_RES, out);
