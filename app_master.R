@@ -18,7 +18,14 @@ suppressPackageStartupMessages({
 })
 
 APP_ROOT <- normalizePath(Sys.getenv("APP_ROOT", "."), winslash = "/", mustWork = FALSE)
-if (!exists("carregar_dados_app")) {
+# Guard: recarrega o gdrive_public.R quando a versão em memória é ANTERIOR
+# à deste arquivo. Como o app é re-sourceado a cada login mas o
+# gdrive_public.R é carregado uma única vez pelo run.R, uma sessão de
+# desenvolvimento aberta desde antes de uma alteração chamaria funções
+# que ainda não existem no globalenv (erro só em runtime, ao renderizar).
+# Testar só `carregar_dados_app` não bastava: ela já existia na versão antiga.
+if (!all(vapply(c("carregar_dados_app", "cota_col", "brl"),
+                exists, logical(1), inherits = TRUE))) {
   source(file.path(APP_ROOT, "R", "gdrive_public.R"), local = FALSE)
 }
 

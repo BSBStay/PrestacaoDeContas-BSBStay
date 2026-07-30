@@ -18,8 +18,11 @@ suppressPackageStartupMessages({
 addResourcePath("assets", APP_ROOT)
 
 # gdrive_public.R foi carregado por run.R antes deste arquivo.
-# Guard evita dupla carga (e re-execução do .ensure_pkgs()).
-if (!exists("carregar_dados_app", inherits = TRUE)) {
+# Guard evita dupla carga (e re-execução do .ensure_pkgs()), mas recarrega
+# se a versão em memória for anterior — testar só `carregar_dados_app` não
+# basta, pois ela existe em todas as versões (ver app_master.R).
+if (!all(vapply(c("carregar_dados_app", "cota_col", "brl"),
+                exists, logical(1), inherits = TRUE))) {
   source(file.path(APP_ROOT, "R", "gdrive_public.R"), local = FALSE)
 }
 
