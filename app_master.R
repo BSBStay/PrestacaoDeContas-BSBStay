@@ -671,12 +671,20 @@ server <- function(input, output, session) {
         receita_bruta = sum(receita_bruta, na.rm = TRUE),
         taxa_adm      = sum(taxa_adm,      na.rm = TRUE),
         outros_custos = sum(outros_custos, na.rm = TRUE),
-        resultado_liq = sum(resultado_liq, na.rm = TRUE),
+        # Integral do imóvel (base do rateio) e cota-parte deste proprietário
+        resultado_imovel = sum(resultado_liq, na.rm = TRUE),
+        resultado_liq = sum(cota_col(df_mes), na.rm = TRUE),
         ocupacao      = mean(ocupacao,     na.rm = TRUE),
         diaria_media  = mean(diaria_media, na.rm = TRUE),
         n_diarias     = sum(n_diarias,     na.rm = TRUE),
         .groups = "drop"
       )
+    nd <- if ("n_donos" %in% names(df_mes)) as.integer(df_mes$n_donos) else 1L
+    nd <- nd[!is.na(nd)]
+    out$tem_rateio <- length(nd) > 0 && any(nd > 1L)
+    out$cota_lbl   <- if (!out$tem_rateio) "" else if (length(unique(nd)) == 1L)
+      paste0("sua parte — ", round(100 / nd[1]), "% do imóvel")
+    else "sua parte nos imóveis compartilhados"
     out$n_imoveis <- n_im
     dias_mes <- tryCatch(
       as.integer(lubridate::days_in_month(as.Date(paste0(input$mes_sel, "-01")))),
@@ -751,8 +759,12 @@ server <- function(input, output, session) {
       # ════════════════════════════════════════
       div(class = "sec", "RESULTADOS DO MÊS"),
       div(class = "kgrid",
-          kcard("Resultado Líquido", brl(m$resultado_liq),
-                paste0("receita: ", brl(m$receita_bruta)),
+          kcard(if (isTRUE(m$tem_rateio)) "Resultado Líquido — Sua Parte"
+                else "Resultado Líquido",
+                brl(m$resultado_liq),
+                if (isTRUE(m$tem_rateio))
+                  paste0(m$cota_lbl, " · imóvel: ", brl(m$resultado_imovel))
+                else paste0("receita: ", brl(m$receita_bruta)),
                 vg = TRUE, extra_class = "hero"),
           kcard("Receita Bruta",  brl(m$receita_bruta),  "receita do período"),
           kcard("RevPAR",
@@ -1444,8 +1456,11 @@ server <- function(input, output, session) {
   # ── Tabela custos por apartamento ────────────────────────────
   output$t_custos_apto <- renderDT({
     d <- dados(); req(d, input$mes_sel)
-    rec <- rec_fil() |>
-      dplyr::filter(competencia == input$mes_sel) |>
+    base_cst <- rec_fil() |> dplyr::filter(competencia == input$mes_sel)
+    base_cst$.cota <- cota_col(base_cst)
+    base_cst$.nd   <- if ("n_donos" %in% names(base_cst))
+      dplyr::coalesce(as.integer(base_cst$n_donos), 1L) else 1L
+    rec <- base_cst |>
       dplyr::transmute(
         `Imóvel`          = imovel,
         `Receita Bruta`   = brl(receita_bruta),
@@ -1454,7 +1469,9 @@ server <- function(input, output, session) {
         `Reposição`       = paste0("- ", brl(dplyr::coalesce(as.numeric(reposicao_total), 0))),
         `Despesas`        = paste0("- ", brl(dplyr::coalesce(as.numeric(despesas_total), 0))),
         `Outros Custos`   = paste0("- ", brl(outros_custos)),
-        `Resultado Líq`   = brl(resultado_liq),
+        `Resultado Líq`   = ifelse(.nd > 1L,
+                                   paste0(brl(.cota), " (", round(100 / .nd), "%)"),
+                                   brl(.cota)),
         `% Custo/Receita` = paste0(round(ifelse(receita_bruta > 0, outros_custos/receita_bruta*100, 0)), "%")
       )
     validate(need(nrow(rec) > 0, "Sem dados para o período."))
@@ -1621,9 +1638,15 @@ server <- function(input, output, session) {
       frow("Taxa Administrativa",  paste0("- ", brl(m$taxa_adm)),      TRUE),
       frow("Outros custos fixos",  paste0("- ", brl(m$outros_custos)), TRUE),
       if (dev_limp > 0) frow("Devolução Taxa de Limpeza", paste0("+ ", brl(dev_limp)), FALSE),
+      # Imóvel compartilhado: exibe o resultado do imóvel antes da cota,
+      # senão a subtração acima não fecharia com o total mostrado.
+      if (isTRUE(m$tem_rateio))
+        frow("Resultado do imóvel", brl(m$resultado_imovel), FALSE),
       div(class = "ftotal",
-          span("RESULTADO LÍQUIDO"),
-          span(class = "fv g", brl(m$resultado_liq)))
+          span(if (isTRUE(m$tem_rateio)) "SUA PARTE" else "RESULTADO LÍQUIDO"),
+          span(class = "fv g", brl(m$resultado_liq))),
+      if (isTRUE(m$tem_rateio))
+        div(style = "padding:6px 2px 0;font-size:11px;color:#6b7280;", m$cota_lbl)
     )
   })
   
@@ -1646,11 +1669,12 @@ server <- function(input, output, session) {
   # ═══════════════════════════════════════════════════════════
   output$ranking <- renderUI({
     d <- dados(); req(d, input$mes_sel)
-    # OP-13: rankear por resultado_liq (não por receita_bruta)
-    rank_df <- d$receitas |>
-      dplyr::filter(competencia == input$mes_sel) |>
+    # OP-13: rankear por resultado (não por receita_bruta) — cota do dono
+    rk <- d$receitas |> dplyr::filter(competencia == input$mes_sel)
+    rk$.cota <- cota_col(rk)
+    rank_df <- rk |>
       dplyr::group_by(imovel) |>
-      dplyr::summarise(resultado = sum(resultado_liq, na.rm=TRUE), .groups="drop") |>
+      dplyr::summarise(resultado = sum(.cota, na.rm=TRUE), .groups="drop") |>
       dplyr::arrange(dplyr::desc(resultado))
     if (nrow(rank_df) == 0) return(p(class="sem-dados","Sem dados."))
     mx  <- max(abs(rank_df$resultado), 1)
@@ -1679,9 +1703,9 @@ server <- function(input, output, session) {
     # exato — sem depender de lubridate (%m-% quebrou após remover o attach)
     mes_ini <- seq(mes_max, by = "-11 months", length.out = 2)[2]
     df_12   <- df_base |> dplyr::filter(mes >= mes_ini)
-    acum    <- df_12 |> dplyr::summarise(
-      rec = sum(receita_bruta, na.rm=TRUE),
-      res = sum(resultado_liq, na.rm=TRUE)
+    acum    <- data.frame(
+      rec = sum(df_12$receita_bruta, na.rm = TRUE),
+      res = sum(cota_col(df_12),     na.rm = TRUE)   # acumulado da cota-parte
     )
     div(class="acg",
         div(div(class="al","RECEITA ACUMULADA"),
@@ -1696,9 +1720,10 @@ server <- function(input, output, session) {
   # OUTPUT: Evolução 12 Meses — PUB-9: resultado em barras, receita em linha
   # ═══════════════════════════════════════════════════════════
   output$g_evolucao <- renderPlotly({
-    df <- rec_fil() |>
+    ev <- rec_fil(); ev$.cota <- cota_col(ev)   # série da cota do proprietário
+    df <- ev |>
       dplyr::group_by(mes, mes_label) |>
-      dplyr::summarise(receita=sum(receita_bruta,na.rm=TRUE),resultado=sum(resultado_liq,na.rm=TRUE),.groups="drop") |>
+      dplyr::summarise(receita=sum(receita_bruta,na.rm=TRUE),resultado=sum(.cota,na.rm=TRUE),.groups="drop") |>
       dplyr::arrange(as.Date(mes)) |>
       tail(12)
     validate(need(nrow(df)>0,"Sem dados."))
@@ -1728,15 +1753,20 @@ server <- function(input, output, session) {
   # OUTPUT: Tabela histórica
   # ═══════════════════════════════════════════════════════════
   output$t_historico <- renderDT({
-    df <- rec_fil() |>
-      dplyr::arrange(dplyr::desc(mes)) |>
+    hb <- rec_fil() |> dplyr::arrange(dplyr::desc(mes))
+    hb$.cota <- cota_col(hb)
+    hb$.nd   <- if ("n_donos" %in% names(hb))
+      dplyr::coalesce(as.integer(hb$n_donos), 1L) else 1L
+    df <- hb |>
       dplyr::transmute(
         `Imóvel`        = imovel,
         `Mês`           = mes_label,
         `Receita Bruta` = brl(receita_bruta),
         `Taxa Adm`      = paste0("- ", brl(taxa_adm)),
         `Outros Custos` = paste0("- ", brl(outros_custos)),
-        `Resultado Líq` = brl(resultado_liq),
+        `Resultado Líq` = ifelse(.nd > 1L,
+                                 paste0(brl(.cota), " (", round(100 / .nd), "%)"),
+                                 brl(.cota)),
         `Ocupação`      = paste0(round(ocupacao), "%"),
         `Diária Média`  = brl(diaria_media),
         `Nº Diárias`    = n_diarias
@@ -2654,9 +2684,9 @@ server <- function(input, output, session) {
   .ger_key    <- function(mes, apto) paste0(as.character(mes), "|", apto)
 
   # Propaga valores publicados para TODOS os proprietários do imóvel.
-  # Modelo espelho (multi-dono): a publicação de um card vale para os 2+
-  # donos do apartamento — mesmo comportamento do reload via SQLite, cujo
-  # join de ajustes é por (mes, apto) sem filtro de cpf.
+  # Receita, taxa e custos são espelhados integralmente entre os donos; o
+  # RESULTADO é rateado (resultado_cota). Mesmo comportamento do reload via
+  # SQLite, cujo join de ajustes é por (mes, apto) sem filtro de cpf.
   .ger_apply_edits <- function(mes, apto, edits) {
     for (cpf in names(rv$app_data)) {
       recs <- rv$app_data[[cpf]]$receitas
@@ -2671,10 +2701,18 @@ server <- function(input, output, session) {
       rv$app_data[[cpf]]$receitas$despesas_total[idx_r]   <- edits$despesas
       rv$app_data[[cpf]]$receitas$outros_custos[idx_r]    <-
         edits$manutencao + edits$reposicao + edits$despesas
-      rv$app_data[[cpf]]$receitas$resultado_liq[idx_r]    <-
-        rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
+      novo_res <- rv$app_data[[cpf]]$receitas$receita_bruta[idx_r] -
         edits$taxa_adm -
         (edits$manutencao + edits$reposicao + edits$despesas)
+      rv$app_data[[cpf]]$receitas$resultado_liq[idx_r] <- novo_res
+      # Recalcula a cota: sem isto o proprietário continuaria vendo a
+      # parte do resultado ANTERIOR à revisão publicada.
+      if ("resultado_cota" %in% names(recs)) {
+        nd <- if ("n_donos" %in% names(recs))
+          suppressWarnings(as.integer(recs$n_donos[idx_r])) else 1L
+        nd[is.na(nd) | nd < 1L] <- 1L
+        rv$app_data[[cpf]]$receitas$resultado_cota[idx_r] <- novo_res / nd
+      }
     }
   }
   .ger_get    <- function(key, field, default) { e <- rv$ger_edits[[key]]; if (!is.null(e) && !is.null(e[[field]])) e[[field]] else default }

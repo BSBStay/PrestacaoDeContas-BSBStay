@@ -80,6 +80,13 @@ brl <- function(x) {
                                big.mark = ".", decimal.mark = ",")))
 }
 
+# Cota-parte do proprietário no resultado. Em imóvel de dono único é
+# igual ao resultado integral. O fallback para `resultado_liq` protege
+# contra objetos de cache gerados antes da coluna existir.
+cota_col <- function(df) {
+  if ("resultado_cota" %in% names(df)) df$resultado_cota else df$resultado_liq
+}
+
 parse_date_safe <- function(x) {
   if (is.null(x) || all(is.na(x))) return(as.Date(NA))
   if (inherits(x, "Date")) return(x)
@@ -639,11 +646,26 @@ montar_objeto_app_sqlite <- function(con) {
     data.frame()
   })
   
+  # ── Nº de donos por imóvel ───────────────────────────────────
+  # Base do rateio do resultado (regra da gestão, jul/2026): receita,
+  # taxa e custos são espelhados INTEGRALMENTE para cada co-proprietário,
+  # mas o RESULTADO LÍQUIDO é rateado pelo número de donos — cada um
+  # recebe sua cota-parte. Com 2 donos = 50% para cada; o Vision 302
+  # tem 3 donos, então o rateio é pelo nº real e não uma metade fixa
+  # (só assim a soma das cotas reconstitui o resultado do imóvel).
+  donos_por_imovel <- if (nrow(portfolio) > 0) {
+    portfolio |>
+      dplyr::distinct(nome, cpf_cnpj) |>
+      dplyr::count(nome, name = "n_donos") |>
+      dplyr::rename(imovel = nome)
+  } else {
+    data.frame(imovel = character(), n_donos = integer())
+  }
+
   # ── Mapa property_id → dono(s) do imóvel ─────────────────────
-  # MULTI-DONO (modelo espelho, validado com a gestão em jul/2026): cada
-  # co-proprietário vê o apartamento INTEIRO. Fatos gravados sob o
-  # property_id de apenas um dono são expandidos para TODOS os donos do
-  # mesmo imóvel — o join abaixo produz 1 linha por (property_id, dono).
+  # Fatos gravados sob o property_id de apenas um dono são expandidos
+  # para TODOS os donos do mesmo imóvel — o join abaixo produz 1 linha
+  # por (property_id, dono).
   pid_map <- if (nrow(portfolio) > 0) {
     pid_nome <- portfolio |>
       dplyr::select(property_id, imovel_nome = nome) |>
@@ -945,6 +967,30 @@ montar_objeto_app_sqlite <- function(con) {
       message("[Ger] AVISO ao aplicar ajustes: ", e$message)
       recs_base
     })
+
+    # ── Rateio do resultado entre co-proprietários ──────────────
+    # `resultado_liq` permanece sendo o resultado INTEGRAL do imóvel —
+    # é o que o painel admin consolida (totais, rankings, Insights).
+    # `resultado_cota` é a parte deste proprietário, exibida na
+    # prestação de contas individual. Imóvel de dono único: as duas
+    # colunas são iguais (n_donos = 1), então nada muda para eles.
+    # Aplicado DEPOIS dos ajustes gerenciais, para que a cota reflita
+    # qualquer revisão publicada pelo admin.
+    recs <- tryCatch({
+      if (nrow(recs) > 0) {
+        recs |>
+          dplyr::left_join(donos_por_imovel, by = "imovel") |>
+          dplyr::mutate(
+            n_donos        = dplyr::coalesce(as.integer(n_donos), 1L),
+            n_donos        = dplyr::if_else(n_donos < 1L, 1L, n_donos),
+            resultado_cota = resultado_liq / n_donos
+          )
+      } else recs
+    }, error = function(e) {
+      message("[Rateio] AVISO: ", e$message)
+      if (nrow(recs) > 0) dplyr::mutate(recs, n_donos = 1L, resultado_cota = resultado_liq) else recs
+    })
+
     cal  <- if (!is.null(calendario) && nrow(calendario) > 0) calendario |> dplyr::filter(cpf_cnpj == cpf) else data.frame()
     resv <- if (nrow(reservas_clean) > 0) reservas_clean |> dplyr::filter(cpf_cnpj == cpf) else data.frame()
     man  <- if (nrow(manutencao_clean) > 0) manutencao_clean |> dplyr::filter(cpf_cnpj == cpf) else data.frame()

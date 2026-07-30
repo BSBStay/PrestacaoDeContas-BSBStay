@@ -506,6 +506,89 @@ do agregado também fiquem exatos — até lá, o calendário mostra os dias rea
 
 ---
 
+## Rateio do resultado entre co-proprietários (23/07/2026)
+
+### Regra de negócio (Adriane)
+
+> "Nos apartamentos que possuem dois donos, apenas o resultado líquido deve
+> ser dividido por 2."
+
+Isto **altera** o modelo espelho documentado acima: receita, taxa adm e custos
+continuam espelhados integralmente para cada co-proprietário, mas o
+**resultado líquido passa a ser rateado**.
+
+### Dois achados do diagnóstico que mudaram a implementação
+
+**1. Existe imóvel com 3 donos.** `Vision 302` (Luana, Marina, Sonia Mariah)
+não estava na lista de 6 apartamentos informada. Dividir por 2 fixo daria a
+cada um dos 3 metade do prejuízo, somando 150% do valor real. Decisão
+validada: **ratear pelo nº real de donos** — /2 nos 6 casos que a Adriane viu
+(idêntico ao pedido) e /3 no Vision 302. Só assim a soma das cotas
+reconstitui o resultado do imóvel.
+
+**2. A aritmética deixa de fechar na tela.** Antes, as 15 linhas dos imóveis
+compartilhados fechavam (Receita − Taxa − Custos + Devolução = Resultado).
+Com o rateio, nenhuma fecha. Decisão validada: manter receita e custos
+integrais e **rotular explicitamente a cota**.
+
+### Implementação
+
+**`R/gdrive_public.R`** — mapa `donos_por_imovel` (nº de proprietários
+distintos por imóvel) e duas colunas em `receitas`:
+
+| Coluna | Significado | Consumidor |
+|---|---|---|
+| `resultado_liq` | resultado **integral** do imóvel | consolidado admin (totais, rankings, Insights, Gerencial) |
+| `resultado_cota` | `resultado_liq / n_donos` | prestação de contas por proprietário |
+
+Em imóvel de dono único (`n_donos = 1`) as duas colunas são iguais — nada muda
+para 1.478 das 1.560 linhas. O rateio é aplicado **depois** dos ajustes
+gerenciais, para que a cota reflita qualquer revisão publicada.
+
+Helper `cota_col(df)` centraliza a leitura com fallback para `resultado_liq`,
+protegendo contra objetos de cache anteriores à coluna.
+
+**`app_public.R` e `app_master.R` (aba proprietário)** — passam a exibir a
+cota em: card principal, bloco de resultado financeiro, tabela de custos por
+apartamento, ranking, gráfico de evolução, acumulado 12 meses, histórico
+detalhado e exportação Excel.
+
+Rotulagem quando há compartilhamento:
+- Card: **"Resultado Líquido — Sua Parte"**, subtítulo `sua parte — 50% do
+  imóvel · imóvel: R$ X`
+- Bloco financeiro: linha extra "Resultado do imóvel" antes do total, que
+  passa a se chamar **"SUA PARTE"**
+- Tabelas: valor seguido do percentual, ex. `R$ 2.973,07 (50%)`
+- Excel: aba do imóvel ganha coluna "Resultado Imóvel (R$)" e subtítulo
+  explicando o compartilhamento
+
+**`app_master.R` (`.ger_apply_edits`)** — ao publicar uma revisão, recalcula
+`resultado_cota` além de `resultado_liq`. Sem isso o proprietário continuaria
+vendo a cota do resultado **anterior** à revisão.
+
+**Consolidado admin inalterado** — `carteira_flat_uni()` já usa
+`resultado_liq`, então totais da carteira, rankings de imóveis, Insights e
+Gerencial seguem no valor integral. O total de jun/2026 permanece R$ 1.284.413.
+
+### Validação
+
+| Verificação | Resultado |
+|---|---|
+| `parse()` nos 5 arquivos R | OK |
+| Dono único: cota == integral (1.478 linhas) | 0 divergências |
+| Multi-dono: soma das cotas == integral (38 grupos) | 0 divergências |
+| Vision 302 rateado por 3 | −R$ 741,11 por dono |
+| Consolidado admin preservado | R$ 1.284.413 |
+
+Impacto mensal (jun/2026): Rocha Investimentos R$ 31.195 → R$ 15.598;
+Caio Resende/VR R$ 25.249 → R$ 12.625; Raíza Batista R$ 5.946 → R$ 2.973.
+
+⚠️ Em imóvel com 3 donos, os valores **arredondados** para exibição somam 1
+centavo a mais que o integral (−741,11 × 3 = −2.223,33 vs −2.223,32). Os
+valores internos são exatos; é artefato de arredondamento na apresentação.
+
+---
+
 ## Recomendações futuras (fora do escopo desta rodada)
 
 1. **`btn_sync` assíncrono** (`app_public.R`)  
