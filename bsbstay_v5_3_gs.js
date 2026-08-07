@@ -873,6 +873,58 @@ function openSheetCI_(book, token) {
 }
 
 /**
+ * Casa o nome da aba EXATAMENTE (case/acento-insensitive), sem "includes".
+ * Necessário quando duas abas têm nomes parecidos e uma é substring da
+ * outra — ex.: "serviços" é substring de "produtos e serviços". Usar
+ * openSheetCI_ (que faz .includes()) casaria a aba errada.
+ * Retorna null se não encontrar (sem fallback — o chamador decide).
+ */
+function findSheetExactCI_(book, tokenExact) {
+  const t = normalizeKey_(tokenExact);
+  for (const sh of book.getSheets()) {
+    if (normalizeKey_(sh.getName()) === t) return sh;
+  }
+  return null;
+}
+
+const MESES_PT_ = ["JANEIRO","FEVEREIRO","MARCO","ABRIL","MAIO","JUNHO",
+                   "JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"];
+
+/**
+ * Localiza a aba do MÊS DA COMPETÊNCIA pelo nome (não pela posição).
+ * Bug corrigido (ago/2026): usar sheets[sheets.length-1] ("a última aba é
+ * o mês atual") quebra silenciosamente assim que alguém adiciona QUALQUER
+ * aba após a do mês corrente — ex.: uma aba de rascunho/teste. Em jul/2026
+ * isso fez o ETL ler uma aba de teste com 73 linhas de outros apartamentos
+ * em vez das 583 linhas reais de Julho.
+ *
+ * Estratégia: casa o nome da aba (normalizado, sem acento/espaço) contra o
+ * nome do mês da competência. Se não achar, cai no fallback antigo (última
+ * aba) MAS sinaliza uma pendência — o problema fica visível em vez de
+ * silencioso.
+ */
+function findSheetByCompetencia_(sheets, competencia, source, pendBatch) {
+  const mesIdx = parseCompetencia_(competencia);
+  const mesNome = mesIdx ? MESES_PT_[Number(competencia.split("-")[1]) - 1] : null;
+  if (mesNome) {
+    for (const sh of sheets) {
+      if (normalize_(sh.getName()) === mesNome) return sh;
+    }
+    // Casamento parcial (ex.: aba "Julho " ou "Julho/26")
+    for (const sh of sheets) {
+      if (normalize_(sh.getName()).includes(mesNome)) return sh;
+    }
+  }
+  if (pendBatch) {
+    queuePend_(pendBatch, competencia, source, "", "",
+      `Aba do mês "${mesNome || competencia}" não encontrada entre [${sheets.map(s => s.getName()).join(", ")}]. ` +
+      `Usando a última aba como fallback — CONFERIR se é a correta.`,
+      "ABA_MES_NAO_ENCONTRADA");
+  }
+  return sheets[sheets.length - 1];
+}
+
+/**
  * parseFormula_: avalia fórmulas simples deixadas como string em células de valor.
  * Ex: "=0.99*7" → 6.93. Suporta + - * /. Retorna 0 em caso de erro.
  */
@@ -1540,20 +1592,97 @@ function ingestReservas_(competencia, sourcesFolder, dedupe, aliasMap, canonMap,
  *    2026-04: igual 2026-02 mas sem ADM/SUB
  *  • "Valor Total" ausente em 2025-12: calcula Quantidade × Valor Unitário como fallback
  *  • "ADM/Sublocado" vs "ADM/SUB" vs ausente: colCI_ com todos os aliases
+ *  • Aba "serviços" separada (fix ago/2026): desde jan/2026 a planilha
+ *    também recebe lançamentos numa aba "serviços" à parte de "produtos e
+ *    serviços" — mesma origem (sistema de field-service), mas exportada
+ *    em outra aba, SEM coluna Apto. O ETL só lia "produtos e serviços" e
+ *    ignorava silenciosamente a outra: 2.436 linhas (R$ 141.659,70) em 4
+ *    dos 6 meses ficaram de fora do sistema. O apto de cada linha de
+ *    "serviços" é resolvido via join pelo Identificador OS contra a aba
+ *    "atividades" (coluna "Nome do cliente" tem o mesmo formato de
+ *    identificador de apto usado no resto da planilha).
  */
 function ingestManutencao_(competencia, sourcesFolder, dedupe, aliasMap, canonMap, pendBatch) {
   const f = findFolderByAliases_(sourcesFolder, CFG.DRIVE.MANUTENCAO);
   if (!f) return 0;
 
   const book = openMostRecentGoogleSheet_(f);
-  const sh   = openSheetCI_(book, "produtos");           // "produtos e serviços"
+  const out  = [];
+
+  const shProd = openSheetCI_(book, "produtos");   // "produtos e serviços"
+  processarLinhasManutencao_(shProd, competencia, dedupe, aliasMap, canonMap, pendBatch, out, null);
+
+  // Aba "serviços" exige nome EXATO (não usar openSheetCI_ com token
+  // "servicos": "produtos e serviços" também contém a substring "servicos"
+  // e seria casada primeiro, por vir antes na ordem das abas).
+  const shServ = findSheetExactCI_(book, "serviços");
+  if (shServ) {
+    const osParaApto = buildMapaOsParaApto_(book);
+    if (osParaApto === null) {
+      // Aba "atividades" (fonte do join) nem existe neste mês — não é OS
+      // isolada sem match, é a base inteira ausente. Uma pendência só,
+      // em vez de uma por linha (poderia chegar a 700+ no mesmo mês).
+      const nLinhas = Math.max(0, shServ.getLastRow() - 1);
+      if (nLinhas > 0) {
+        queuePend_(pendBatch, competencia, "manutencao", "", "",
+          `Aba "serviços" tem ${nLinhas} linha(s) mas a aba "atividades" ` +
+          `(necessária para resolver o apto de cada linha) não foi encontrada ` +
+          `neste mês. Nenhuma linha de "serviços" foi importada — valor não contabilizado.`,
+          "SERVICOS_SEM_ATIVIDADES");
+      }
+    } else {
+      processarLinhasManutencao_(shServ, competencia, dedupe, aliasMap, canonMap, pendBatch, out, osParaApto);
+    }
+  }
+
+  // NOTA: a limpeza da competência atual (correção do bug append-only)
+  // já acontece centralizadamente em runMonthlyUpdateFixedRoot, ANTES do
+  // dedup ser carregado — ver removeRowsByCompetencia_ ali.
+  appendRows_(CFG.SHEETS.FACT_MAN, out);
+  return out.length;
+}
+
+/**
+ * Constrói o mapa Identificador OS -> nome do apto, a partir da aba
+ * "atividades" (log bruto de tarefas do sistema de field-service). Usado
+ * para resolver o apto das linhas da aba "serviços", que não tem coluna
+ * Apto própria.
+ */
+// Retorna null se a aba "atividades" não existir neste mês (caso distinto
+// de "existe mas esta OS específica não está nela" — ver uso em
+// ingestManutencao_, que trata os dois casos de forma diferente).
+function buildMapaOsParaApto_(book) {
+  const sh = findSheetExactCI_(book, "atividades");
+  if (!sh) return null;
+  const map = new Map();
   const data = sh.getDataRange().getValues();
-  if (data.length < 2) return 0;
+  if (data.length < 2) return map;
+  const idx = headerIndexCI_(data[0]);
+  const cOs   = colCI_(idx, "Identificador da OS", "Identificador OS", "OS", "ID OS");
+  const cApto = colCI_(idx, "Nome do cliente", "Nome do Cliente");
+  if (cOs === undefined || cApto === undefined) return map;
+  for (let r = 1; r < data.length; r++) {
+    const os = String(data[r][cOs] ?? "").trim();
+    const apto = data[r][cApto];
+    if (os && apto && !map.has(os)) map.set(os, apto);
+  }
+  return map;
+}
+
+/**
+ * Processa uma aba de manutenção (linhas de produto OU de serviço — mesmo
+ * schema de valores, coluna de nome do item com rótulo diferente) e
+ * empilha em `out`. Se `osParaApto` for passado, a aba não tem coluna
+ * Apto própria e o apto é resolvido pelo Identificador OS.
+ */
+function processarLinhasManutencao_(sh, competencia, dedupe, aliasMap, canonMap, pendBatch, out, osParaApto) {
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return;
 
   const idx = headerIndexCI_(data[0]);
 
   const cOsId   = colCI_(idx, "Identificador OS", "Identificador da OS", "OS", "ID OS");
-  const cProd   = colCI_(idx, "Nome do Produto", "Produto", "Produto/Serviço");
+  const cProd   = colCI_(idx, "Nome do Produto", "Nome do Serviço", "Produto", "Serviço", "Produto/Serviço");
   const cApto   = colCI_(idx, "Apto", "Apartamento");
   const cValTot = colCI_(idx, "Valor Total");
   const cValUni = colCI_(idx, "Valor Unitário", "Valor Unitario");
@@ -1561,12 +1690,30 @@ function ingestManutencao_(competencia, sourcesFolder, dedupe, aliasMap, canonMa
   const cAdm    = colCI_(idx, "ADM/SUB", "ADM/Sublocado", "Adm/Sub", "ADM");
   const cObs    = colCI_(idx, "OBS", "Obser", "Observação", "Observacao");
 
-  if (cApto === undefined || cProd === undefined) return 0;
+  if (cProd === undefined) return;
+  if (cApto === undefined && !osParaApto) return;   // sem Apto e sem join: não há como resolver
 
-  const out = [];
   for (let r = 1; r < data.length; r++) {
-    const row = data[r];
-    const apt = row[cApto];
+    const row  = data[r];
+    const osId = cOsId !== undefined ? (row[cOsId] ?? "") : "";
+
+    let apt;
+    if (cApto !== undefined) {
+      apt = row[cApto];
+    } else {
+      apt = osParaApto.get(String(osId).trim());
+      if (!apt) {
+        // Sem Apto na linha e sem OS correspondente em "atividades":
+        // não há como atribuir o custo a nenhum imóvel. Registra a
+        // pendência (visível para revisão manual) e pula a linha.
+        if (String(osId).trim()) {
+          queuePend_(pendBatch, competencia, "manutencao", "", "",
+            `OS "${osId}" na aba de serviços sem correspondência em "atividades" — apto não resolvido.`,
+            "OS_SEM_APTO");
+        }
+        continue;
+      }
+    }
     if (!apt) continue;
 
     // MULTI-DONO: replica a linha para cada property_id do apartamento.
@@ -1574,8 +1721,7 @@ function ingestManutencao_(competencia, sourcesFolder, dedupe, aliasMap, canonMa
     if (propertyIds.length === 0) queuePend_(pendBatch, competencia, "manutencao", apt, aptoNorm,
       "Apartamento em manutenção não encontrado no dim_imovel.");
 
-    const osId   = cOsId  !== undefined ? (row[cOsId]  ?? "") : "";
-    const produto = cProd  !== undefined ? (row[cProd]  ?? "") : "";
+    const produto = row[cProd] ?? "";
     const obs    = cObs   !== undefined ? (row[cObs]   ?? "") : "";
     const adm    = cAdm   !== undefined ? (row[cAdm]   ?? "") : "";
 
@@ -1599,12 +1745,6 @@ function ingestManutencao_(competencia, sourcesFolder, dedupe, aliasMap, canonMa
         String(osId), String(produto), valor, String(adm), String(obs)]);
     }
   }
-
-  // NOTA: a limpeza da competência atual (correção do bug append-only)
-  // já acontece centralizadamente em runMonthlyUpdateFixedRoot, ANTES do
-  // dedup ser carregado — ver removeRowsByCompetencia_ ali.
-  appendRows_(CFG.SHEETS.FACT_MAN, out);
-  return out.length;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1613,8 +1753,10 @@ function ingestManutencao_(competencia, sourcesFolder, dedupe, aliasMap, canonMa
 /*
  * Problemas resolvidos:
  *  • Nome da aba varia por mês: "Dezembro", "Janeiro ", "Fevereiro", "Abril"
- *    → openSheetCI_: usa a aba mais recente (primeira que contiver o mês OU última aba)
- *    → Estratégia: usa a última aba da planilha (que corresponde ao mês atual)
+ *    → findSheetByCompetencia_: casa o nome da aba com o mês da competência
+ *      (fix ago/2026 — antes usava "última aba", que quebrava se qualquer
+ *      aba fosse adicionada depois da do mês corrente; ver comentário na
+ *      própria função)
  *  • Schema da coluna de apto varia: "Apto", "Apartamento ", "Apartamento"
  *  • Schema de item varia: "Item/Serviço", "Manutenção/Item de reposição", "Reposição/Enxoval "
  *  • Coluna valor pode ter trailing space: "Valor " (2026-01, 2026-02, 2026-04)
@@ -1628,8 +1770,7 @@ function ingestReposicao_(competencia, sourcesFolder, dedupe, aliasMap, canonMap
   const sheets = book.getSheets();
   if (!sheets.length) return 0;
 
-  // Usa a última aba (corresponde ao mês mais recente na planilha de reposição)
-  const sh   = sheets[sheets.length - 1];
+  const sh   = findSheetByCompetencia_(sheets, competencia, "reposicao", pendBatch);
   const data = sh.getDataRange().getValues();
   if (data.length < 2) return 0;
 

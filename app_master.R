@@ -1586,17 +1586,22 @@ server <- function(input, output, session) {
     else if ("item_raw" %in% names(rep)) rep$item_raw
     else rep("—", nrow(rep))
     
-    # Quantidade e valores
+    # Quantidade e valores.
+    # `valor_unitario_ou_total` já é o TOTAL da linha (é o que a planilha
+    # fonte lança em "Valor" — ex.: "Copo (2)" = R$15,62 já para os 2
+    # copos). NÃO multiplicar por quantidade de novo (bug reportado pela
+    # Adriane, ago/2026): isso dobrava/quintuplicava o valor exibido.
+    # "Valor Unit." é DERIVADO (total ÷ qtd) só para referência.
     qtd_col   <- suppressWarnings(as.numeric(if ("quantidade" %in% names(rep)) rep$quantidade else NA))
-    val_col   <- suppressWarnings(as.numeric(rep$valor_unitario_ou_total))
-    val_total <- ifelse(is.na(qtd_col) | qtd_col <= 0, val_col, qtd_col * val_col)
+    val_total <- suppressWarnings(as.numeric(rep$valor_unitario_ou_total))
+    val_unit  <- ifelse(is.na(qtd_col) | qtd_col <= 0, val_total, val_total / qtd_col)
     max_val   <- max(val_total, na.rm = TRUE)
-    
+
     df <- data.frame(
       `Imóvel`      = as.character(apto_col),
       `Item`        = as.character(item_col),
       `Qtd.`        = ifelse(is.na(qtd_col), "—", as.character(round(qtd_col))),
-      `Valor Unit.` = brl(val_col),
+      `Valor Unit.` = brl(val_unit),
       `Valor Total` = brl(val_total),
       check.names      = FALSE,
       stringsAsFactors = FALSE

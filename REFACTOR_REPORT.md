@@ -589,6 +589,118 @@ valores internos são exatos; é artefato de arredondamento na apresentação.
 
 ---
 
+## Correção de dois bugs estruturais no ETL (06/08/2026)
+
+Investigação motivada por feedback da Adriane: um item de "Pequenos reparos"
+aparecia com valor diferente da planilha fonte. A causa raiz encontrada foi
+bem maior que o sintoma reportado — dois bugs de **seleção de aba** no ETL,
+presentes desde janeiro/2026, silenciosamente excluindo ou trocando dados.
+
+Diagnóstico feito sobre o export completo de fontes (jan–jul/2026,
+`[Downloads]/2026-20260806T222847Z-1-001.zip`), comparando planilha fonte
+linha a linha contra o que o ETL efetivamente lê.
+
+### D1 — Manutenção: aba "serviços" nunca foi lida
+
+**Causa:** `ingestManutencao_` só lia a aba cujo nome contém "produtos"
+(`produtos e serviços`). Desde jan/2026 a planilha também recebe
+lançamentos numa aba separada, **"serviços"** — mesma origem (sistema de
+field-service), schema quase idêntico, mas exportada à parte e **sem
+coluna Apto própria**. O ETL nunca a leu.
+
+| Mês | Linhas ignoradas | Valor ignorado |
+|---|---|---|
+| Jan/2026 | 523 | R$ 30.274,70 |
+| Fev/2026 | 497 | R$ 25.789,80 |
+| Mai/2026 | 751 | R$ 44.035,50 |
+| Jul/2026 | 665 | R$ 41.559,70 |
+| **Total** | **2.436 linhas** | **R$ 141.659,70** |
+
+(Abr e Jun não têm essa aba separada — por isso pareciam corretos.)
+
+**Fix:** `ingestManutencao_` agora lê as duas abas. A lógica de
+extração de valor/produto foi extraída para `processarLinhasManutencao_`
+(reuso entre as duas, elimina duplicação). Como "serviços" não tem coluna
+Apto, o apartamento é resolvido por **join**: `Identificador OS` da aba
+"serviços" → `Identificador da OS` na aba **"atividades"** (log bruto de
+tarefas do field-service) → coluna `Nome do cliente`, que já vem no mesmo
+formato de identificador de apto usado no resto do sistema.
+
+**Validação** (simulação em R sobre os arquivos reais, replicando a lógica
+do join): 100% de resolução onde a aba "atividades" existe —
+1.685 de 1.685 linhas (jan, fev, jul). **Maio é um caso à parte**: a aba
+"serviços" existe (751 linhas, R$ 44.035,50) mas a planilha desse mês
+**não tem aba "atividades" nenhuma** — não há como resolver o apto sem
+join. Tratado como caso distinto de "OS sem match": uma única pendência
+resumida (`SERVICOS_SEM_ATIVIDADES`) em vez de 751 pendências individuais.
+Esse valor de maio só entra no sistema se a Adriane conseguir (re)exportar
+a aba "atividades" daquele mês.
+
+`buildMapaOsParaApto_` diferencia "aba atividades não existe" (retorna
+`null`) de "aba existe mas está vazia/sem colunas esperadas" (retorna mapa
+vazio) — o chamador trata os dois casos de forma diferente para não gerar
+pendências repetidas.
+
+### D2 — Reposição: aba lida por posição, não por nome
+
+**Causa:** `ingestReposicao_` sempre lia `sheets[sheets.length - 1]` — "a
+última aba é o mês atual". Funcionou por coincidência em jan/fev/abr/mai/jun
+(a aba do mês sempre acabava sendo a última). Em jul/2026 alguém adicionou
+uma aba extra depois de "Julho" (**"Página9"**, rascunho/teste com dados de
+outros apartamentos e outro período) — o ETL passou a ler 73 linhas de
+lixo (R$ 2.497,42) em vez das 583 linhas reais de julho (R$ 16.005,34).
+
+**Fix:** nova função `findSheetByCompetencia_` localiza a aba pelo **nome
+do mês da competência** (ex.: competência `2026-07` → procura aba
+"Julho"), com correspondência exata primeiro e parcial depois (cobre
+variações como "Julho " com espaço). Se não encontrar nenhuma, cai no
+comportamento antigo (última aba) mas agora **registra uma pendência**
+(`ABA_MES_NAO_ENCONTRADA`) — o problema fica visível em vez de silencioso.
+
+**Validação:** simulado contra as 6 planilhas de reposição do zip — em
+jul/2026 a correção muda a aba lida de "Página9" para "Julho"; nos demais
+5 meses o resultado é idêntico ao anterior (a aba correta já era a última).
+
+### D3 — Dashboard: multiplicação indevida em Reposição (Adriane, ago/2026)
+
+**Causa:** a coluna `valor_unitario_ou_total` (nome legado, mas já é o
+**total** da linha — é o que a planilha lança em "Valor", ex.: "Copo (2)"
+= R$15,62 já para os 2 copos) era multiplicada de novo por quantidade na
+tabela "Itens de Reposição": R$4,95 (real, 5 cabides) virava "R$4,95 unit.
+× 5 = R$24,75". O card "Total Reposição" já estava correto (soma sem
+multiplicar) — só a tabela detalhada tinha o bug, duplicado em
+`app_public.R` e `app_master.R`.
+
+**Fix:** `Valor Total` passa a exibir o valor da planilha **sem
+transformação**; `Valor Unit.` agora é **derivado** (total ÷ qtd) só para
+referência — antes era o inverso. Verificados os demais 10 usos de
+`valor_unitario_ou_total` nos dois arquivos: todos já somavam/exibiam sem
+multiplicar, nenhum outro ponto tinha o mesmo bug.
+
+### Impacto total apurado
+
+| Bug | Valor não contabilizado / mal atribuído |
+|---|---|
+| D1 (serviços ignorada) | R$ 141.659,70 (2.436 linhas, jan/fev/mai/jul) |
+| D2 (aba errada em julho) | R$ 16.005,34 corretos vs. R$ 2.497,42 lidos por engano |
+| D3 (multiplicação) | Inflava exibição de itens de reposição — sem afetar o agregado/KPI |
+
+### ⚠️ Ação necessária fora do código
+
+1. **Rodar o ETL** ("♻ Reprocessar TODOS os meses" no menu do Sheets) para
+   que jan, fev, mai e jul sejam recalculados com os fixes — isso muda
+   `custos_total` e `resultado_liq`/`resultado_cota` desses meses para a
+   maioria dos proprietários com manutenção no período.
+2. **Maio/2026 precisa da aba "atividades"** re-exportada/adicionada à
+   planilha de Manutenção daquele mês — sem ela, as 751 linhas de
+   "serviços" (R$ 44.035,50) continuam sem apto resolvido mesmo após o fix.
+3. Conferir a aba "Página9" da planilha de Reposição de julho — parece
+   rascunho/teste; se não for mais necessária, mover para fora da pasta do
+   mês evita que o alerta `ABA_MES_NAO_ENCONTRADA` dispare à toa em meses
+   futuros com estrutura parecida.
+
+---
+
 ## Recomendações futuras (fora do escopo desta rodada)
 
 1. **`btn_sync` assíncrono** (`app_public.R`)  
